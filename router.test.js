@@ -51,3 +51,25 @@ test("coordinates employee deliverables through the demo workforce", async () =>
     if(original.openai)process.env.OPENAI_API_KEY=original.openai;if(original.gateway)process.env.AI_GATEWAY_API_KEY=original.gateway;if(original.oidc)process.env.VERCEL_OIDC_TOKEN=original.oidc;
   }
 });
+
+test("configures a current free model fallback without duplicating the primary", () => {
+  const original = {
+    openai: process.env.OPENAI_API_KEY,
+    primary: process.env.AI_GATEWAY_MODEL,
+    fallbacks: process.env.AI_GATEWAY_FALLBACK_MODELS
+  };
+  delete process.env.OPENAI_API_KEY;
+  process.env.AI_GATEWAY_MODEL = "inclusionai/ling-3.0-tiny-free";
+  process.env.AI_GATEWAY_FALLBACK_MODELS = "inclusionai/ling-3.0-tiny-free, poolside/laguna-s-2.1-free, invalid";
+  try {
+    assert.deepEqual(router.gatewayFallbackModels(), ["poolside/laguna-s-2.1-free"]);
+    const routing = router.gatewayRouting({ userId:"founder-1", workspaceId:"company-1", schemaName:"launch_plan" });
+    assert.deepEqual(routing.models, ["poolside/laguna-s-2.1-free"]);
+    assert.equal(routing.user, "founder-1");
+    assert.deepEqual(routing.tags, ["app:nova-ai", "output:launch_plan", "workspace:company-1"]);
+  } finally {
+    if (original.openai === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = original.openai;
+    if (original.primary === undefined) delete process.env.AI_GATEWAY_MODEL; else process.env.AI_GATEWAY_MODEL = original.primary;
+    if (original.fallbacks === undefined) delete process.env.AI_GATEWAY_FALLBACK_MODELS; else process.env.AI_GATEWAY_FALLBACK_MODELS = original.fallbacks;
+  }
+});

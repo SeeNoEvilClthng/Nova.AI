@@ -1,8 +1,11 @@
+const DEFAULT_GATEWAY_MODEL = "inclusionai/ling-3.0-tiny-free";
+const DEFAULT_GATEWAY_FALLBACKS = ["poolside/laguna-s-2.1-free"];
+
 const registry = {
   openai: {
     label: "Vercel AI Gateway",
     role: "Founder Agent",
-    model: () => process.env.OPENAI_API_KEY ? (process.env.OPENAI_MODEL || "gpt-5.6-sol") : (process.env.AI_GATEWAY_MODEL || "inclusionai/ling-3.0-flash-free"),
+    model: () => process.env.OPENAI_API_KEY ? (process.env.OPENAI_MODEL || "gpt-5.6-sol") : (process.env.AI_GATEWAY_MODEL || DEFAULT_GATEWAY_MODEL),
     ready: () => Boolean(process.env.OPENAI_API_KEY || process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN)
   },
   anthropic: { label: "Claude", role: "Auditor Agent", model: () => process.env.ANTHROPIC_MODEL || "Not activated", ready: () => Boolean(process.env.ANTHROPIC_API_KEY) },
@@ -16,9 +19,24 @@ function normalizeUsage(usage = {}) {
   return { inputTokens, outputTokens, totalTokens: usage.totalTokens ?? usage.total_tokens ?? inputTokens + outputTokens };
 }
 
+function gatewayFallbackModels(primary = registry.openai.model()) {
+  const configured = process.env.AI_GATEWAY_FALLBACK_MODELS;
+  const values = configured === undefined ? DEFAULT_GATEWAY_FALLBACKS : configured.split(",");
+  return [...new Set(values.map(value => value.trim()).filter(value => /^[a-z0-9-]+\/[a-z0-9._-]+$/i.test(value) && value !== primary))].slice(0, 3);
+}
+
+function gatewayRouting({ userId, workspaceId, schemaName }) {
+  return {
+    models: gatewayFallbackModels(),
+    user: userId || undefined,
+    tags: ["app:nova-ai", `output:${schemaName}`, workspaceId ? `workspace:${workspaceId}` : "workspace:local"]
+  };
+}
+
 function providerStatus() {
   return Object.fromEntries(Object.entries(registry).map(([id, item]) => [id, {
-    id, label: item.label, role: item.role, model: item.model(), ready: item.ready()
+    id, label: item.label, role: item.role, model: item.model(), ready: item.ready(),
+    ...(id === "openai" && !process.env.OPENAI_API_KEY ? { fallbackModels: gatewayFallbackModels(item.model()) } : {})
   }]));
 }
 
@@ -66,7 +84,7 @@ async function runOpenAI(input, schema, options = {}) {
       prompt: `Founder brief:\n${JSON.stringify(promptInput, null, 2)}\n\nReturn only one valid JSON object matching this JSON Schema exactly. Do not use markdown or add commentary.\n${JSON.stringify(schema)}`,
       maxOutputTokens: 3000,
       temperature: 0.2,
-      providerOptions: { gateway: { user: userId || undefined, tags: ["app:nova-ai", `output:${schemaName}`, workspaceId ? `workspace:${workspaceId}` : "workspace:local"] } },
+      providerOptions: { gateway: gatewayRouting({ userId, workspaceId, schemaName }) },
       abortSignal: AbortSignal.timeout(45_000)
     });
     return {
@@ -122,4 +140,4 @@ async function generateWorkforce(input, fallback, schema) {
   return { ...output.plan, contribution:output.contribution, warnings };
 }
 
-module.exports = { providerStatus, evaluatePlan, generate, generateWorkforce };
+module.exports = { providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce };
