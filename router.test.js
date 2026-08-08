@@ -52,6 +52,25 @@ test("coordinates employee deliverables through the demo workforce", async () =>
   }
 });
 
+test("persists orchestrator and independent reviewer contributions in fallback mode", async () => {
+  const original = { openai:process.env.OPENAI_API_KEY,gateway:process.env.AI_GATEWAY_API_KEY,oidc:process.env.VERCEL_OIDC_TOKEN };
+  delete process.env.OPENAI_API_KEY;delete process.env.AI_GATEWAY_API_KEY;delete process.env.VERCEL_OIDC_TOKEN;
+  try {
+    const result = await router.generateWorkforce(
+      { goal:"Prepare a measurable launch plan" },
+      () => ({ summary:"Team plan",needsApproval:true,employees:[{ role:"Growth Employee",department:"Marketing",status:"completed",deliverable:"Draft outreach",handoff:"Founder review" }] }),
+      {},
+      { schema:{},fallback:() => ({ score:78,verdict:"Revise",ready:false,strengths:["Clear owner"],blockers:["Add a conversion target"],recommendation:"Define the target before approval." }) }
+    );
+    assert.equal(result.review.score, 78);
+    assert.equal(result.contributions.length, 2);
+    assert.deepEqual(result.contributions.map(item => item.role), ["Workforce Orchestrator", "Reviewer Agent"]);
+    assert.ok(result.contributions.every(item => item.model === "Demo engine"));
+  } finally {
+    if(original.openai)process.env.OPENAI_API_KEY=original.openai;if(original.gateway)process.env.AI_GATEWAY_API_KEY=original.gateway;if(original.oidc)process.env.VERCEL_OIDC_TOKEN=original.oidc;
+  }
+});
+
 test("configures a current free model fallback without duplicating the primary", () => {
   const original = {
     openai: process.env.OPENAI_API_KEY,

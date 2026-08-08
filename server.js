@@ -162,6 +162,20 @@ function fallbackWorkforce(input) {
   };
 }
 
+function fallbackWorkforceReview(run) {
+  const employees = Array.isArray(run?.employees) ? run.employees : [];
+  const completeHandoffs = employees.filter(employee => String(employee.handoff || "").length >= 20).length;
+  const ready = employees.length >= 3 && completeHandoffs === employees.length;
+  return {
+    score: ready ? 82 : 64,
+    verdict: ready ? "Ready for founder review" : "Needs a stronger operating handoff",
+    ready,
+    strengths: ["Work is divided into named specialist responsibilities", "External actions remain behind founder approval"],
+    blockers: ready ? [] : ["Add a concrete handoff and measurable outcome for every employee"],
+    recommendation: ready ? "Review the proposed actions and approve only the steps you want the team to execute." : "Revise the weakest handoff before approving this run."
+  };
+}
+
 async function runWorkforce(input) {
   const schema = {
     type:"object",additionalProperties:false,required:["summary","needsApproval","employees"],
@@ -170,7 +184,14 @@ async function runWorkforce(input) {
       employees:{type:"array",items:{type:"object",additionalProperties:false,required:["role","department","status","deliverable","handoff"],properties:{role:{type:"string"},department:{type:"string"},status:{type:"string",enum:["completed"]},deliverable:{type:"string"},handoff:{type:"string"}}}}
     }
   };
-  return router.generateWorkforce(input, fallbackWorkforce, schema);
+  const reviewSchema = {
+    type:"object",additionalProperties:false,required:["score","verdict","ready","strengths","blockers","recommendation"],
+    properties:{
+      score:{type:"integer",minimum:0,maximum:100},verdict:{type:"string"},ready:{type:"boolean"},
+      strengths:{type:"array",items:{type:"string"},maxItems:4},blockers:{type:"array",items:{type:"string"},maxItems:4},recommendation:{type:"string"}
+    }
+  };
+  return router.generateWorkforce(input, fallbackWorkforce, schema, { schema:reviewSchema, fallback:fallbackWorkforceReview });
 }
 
 async function enforceAiBudget(req, workspaceId, planCeiling) {

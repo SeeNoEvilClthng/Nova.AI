@@ -25,9 +25,9 @@ function gatewayFallbackModels(primary = registry.openai.model()) {
   return [...new Set(values.map(value => value.trim()).filter(value => /^[a-z0-9-]+\/[a-z0-9._-]+$/i.test(value) && value !== primary))].slice(0, 3);
 }
 
-function gatewayRouting({ userId, workspaceId, schemaName }) {
+function gatewayRouting({ userId, workspaceId, schemaName, primaryModel = registry.openai.model(), fallbackModels }) {
   return {
-    models: gatewayFallbackModels(),
+    models: fallbackModels || gatewayFallbackModels(primaryModel),
     user: userId || undefined,
     tags: ["app:nova-ai", `output:${schemaName}`, workspaceId ? `workspace:${workspaceId}` : "workspace:local"]
   };
@@ -65,7 +65,7 @@ function parseGatewayJson(text) {
 
 async function runOpenAI(input, schema, options = {}) {
   if (!registry.openai.ready()) return null;
-  const model = registry.openai.model(), generationId = randomUUID();
+  const model = process.env.OPENAI_API_KEY ? registry.openai.model() : (options.model || registry.openai.model()), generationId = randomUUID();
   const { userId, workspaceId, ...promptInput } = input;
   const instructions = options.instructions || [
     "You are Nova.Ai's Founder Agent.",
@@ -84,12 +84,12 @@ async function runOpenAI(input, schema, options = {}) {
       prompt: `Founder brief:\n${JSON.stringify(promptInput, null, 2)}\n\nReturn only one valid JSON object matching this JSON Schema exactly. Do not use markdown or add commentary.\n${JSON.stringify(schema)}`,
       maxOutputTokens: 3000,
       temperature: 0.2,
-      providerOptions: { gateway: gatewayRouting({ userId, workspaceId, schemaName }) },
+      providerOptions: { gateway: gatewayRouting({ userId, workspaceId, schemaName, primaryModel:model, fallbackModels:options.fallbackModels }) },
       abortSignal: AbortSignal.timeout(45_000)
     });
     return {
       plan: parseGatewayJson(result.text),
-      contribution: { id:generationId, provider: "Vercel AI Gateway", role, model, usage:normalizeUsage(result.usage), createdAt:new Date().toISOString() }
+      contribution: { id:generationId, provider: "Vercel AI Gateway", role, model:result.response?.modelId || model, usage:normalizeUsage(result.usage), createdAt:new Date().toISOString() }
     };
   }
 
@@ -127,7 +127,7 @@ async function generate(input, fallback, schema) {
   };
 }
 
-async function generateWorkforce(input, fallback, schema) {
+async function generateWorkforce(input, fallback, schema, reviewOptions = {}) {
   const warnings = [];
   let output = null;
   try {
@@ -136,8 +136,22 @@ async function generateWorkforce(input, fallback, schema) {
       instructions:"You are Nova.Ai's workforce orchestrator. Act as five coordinated specialist employees: Strategy, Research, Product, Growth, and Operations. Give each employee a concrete deliverable and an explicit handoff. Use only the provided company context. Distinguish assumptions from evidence. Never claim that external research, customer contact, publishing, spending, deployment, or communication occurred. All external actions must remain proposals requiring founder approval. Return every employee with status completed."
     });
   } catch (error) { warnings.push(error.message); }
-  if (!output) output = { plan:fallback(input), contribution:{ provider:"Nova",role:"Workforce Orchestrator",model:"Demo engine" } };
-  return { ...output.plan, contribution:output.contribution, warnings };
+  if (!output) output = { plan:fallback(input), contribution:{ id:randomUUID(),provider:"Nova",role:"Workforce Orchestrator",model:"Demo engine",createdAt:new Date().toISOString() } };
+  let reviewOutput = null;
+  if (reviewOptions.schema) {
+    try {
+      const primaryModel = registry.openai.model();
+      const reviewerModel = process.env.OPENAI_API_KEY ? primaryModel : (gatewayFallbackModels(primaryModel)[0] || primaryModel);
+      reviewOutput = await runOpenAI({ ...input, employeeRun:output.plan }, reviewOptions.schema, {
+        role:"Reviewer Agent",schemaName:"employee_run_review",model:reviewerModel,
+        fallbackModels:reviewerModel === primaryModel ? gatewayFallbackModels(primaryModel) : [primaryModel],
+        instructions:"You are Nova.Ai's independent Reviewer Agent. Audit the proposed employee work without rewriting it. Check goal alignment, evidence discipline, measurable outcomes, handoff quality, and founder safety. Do not claim external actions occurred. Mark ready false when a blocker must be fixed before founder approval. Return only the requested JSON review."
+      });
+    } catch (error) { warnings.push(error.message); }
+  }
+  if (!reviewOutput && reviewOptions.fallback) reviewOutput = { plan:reviewOptions.fallback(output.plan), contribution:{ id:randomUUID(),provider:"Nova",role:"Reviewer Agent",model:"Demo engine",createdAt:new Date().toISOString() } };
+  const contributions = [output.contribution, reviewOutput?.contribution].filter(Boolean);
+  return { ...output.plan, review:reviewOutput?.plan || null, contribution:output.contribution, contributions, warnings };
 }
 
 module.exports = { providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce };
