@@ -148,9 +148,9 @@ async function generateWithOpenAI(input) {
 }
 
 function fallbackWorkforce(input) {
-  const company = input.company || "the company", goal = input.goal;
+  const company = input.company || "the company", goal = input.goal, revision = input.context?.revision;
   return {
-    summary: `The Nova.Ai workforce divided “${goal}” into a supervised execution plan for ${company}.`,
+    summary: revision ? `The Nova.Ai workforce revised “${goal}” using the founder’s feedback: ${String(revision.founderFeedback||"").slice(0,240)}` : `The Nova.Ai workforce divided “${goal}” into a supervised execution plan for ${company}.`,
     needsApproval: true,
     employees: [
       { role:"Strategy Employee",department:"Strategy",status:"completed",deliverable:`Define the smallest measurable version of the objective and a 14-day scorecard. Keep every activity tied to: ${goal}` ,handoff:"Research validates the riskiest assumption before execution."},
