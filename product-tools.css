@@ -1,0 +1,6 @@
+.product-tool { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 800; }
+.product-tool:hover { color: var(--purple); border-color: #cfc9fa; background: #faf9ff; }
+.builder-save-state { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; min-height: 18px; margin-top: -9px; color: #8991a1; font-size: 11px; }
+.builder-save-state.saving { color: var(--purple); }
+.builder-save-state.saved { color: var(--green); }
+@media (max-width: 760px) { .product-tool { display: none; } }

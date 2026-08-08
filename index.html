@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Nova.Ai — AI company launch platform</title>
+  <meta name="description" content="Build and launch a company with a supervised AI team.">
+  <meta property="og:type" content="website"><meta property="og:site_name" content="Nova.Ai"><meta property="og:title" content="Nova.Ai — Your supervised AI company team"><meta property="og:description" content="Build and launch a company with a founder-supervised AI workforce."><meta property="og:image" content="https://nova-ai-tau-one.vercel.app/og-nova.png">
+  <meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://nova-ai-tau-one.vercel.app/og-nova.png">
+  <link rel="icon" type="image/png" href="/nova-mark.png">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="router.css">
+  <link rel="stylesheet" href="workspaces.css">
+  <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="billing.css">
+  <link rel="stylesheet" href="revision.css">
+  <link rel="stylesheet" href="workspace-actions.css">
+  <link rel="stylesheet" href="onboarding.css">
+  <link rel="stylesheet" href="product-tools.css">
+  <link rel="stylesheet" href="lead-inbox.css">
+  <link rel="stylesheet" href="launch-studio.css">
+  <link rel="stylesheet" href="validation.css">
+  <link rel="stylesheet" href="modern.css">
+  <link rel="stylesheet" href="workforce.css">
+  <link rel="stylesheet" href="ai-office.css">
+  <link rel="stylesheet" href="ai-activity.css">
+  <link rel="stylesheet" href="command-menu.css">
+  <link rel="stylesheet" href="notifications.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#" aria-label="Nova.Ai home"><img src="/nova-mark.png" alt=""><b><span>NOVA</span><em>.ai</em></b><i>LIVE</i></a>
+    <nav>
+      <button class="nav-item active" data-view="home" aria-current="page" title="See company health and current activity"><span class="nav-icon">⌂</span><span class="nav-copy"><strong>Mission Control</strong><em>Overview and progress</em></span></button>
+      <button class="nav-item" data-view="builder" title="Turn your business idea into a launch strategy"><span class="nav-icon">✦</span><span class="nav-copy"><strong>Business Builder</strong><em>Create your strategy</em></span></button>
+      <button class="nav-item" data-view="studio" title="Create, publish, and manage your launch page"><span class="nav-icon">▱</span><span class="nav-copy"><strong>Launch Studio</strong><em>Build and publish</em></span></button>
+      <button class="nav-item" data-view="validation" title="Record customer interviews and demand signals"><span class="nav-icon">⌕</span><span class="nav-copy"><strong>Validation</strong><em>Test customer demand</em></span></button>
+      <button class="nav-item" data-view="team" title="View the AI agents working on your company"><span class="nav-icon">◉</span><span class="nav-copy"><strong>AI Team</strong><em>Agents and providers</em></span></button>
+      <button class="nav-item" data-view="office" title="Watch your AI employees work"><span class="nav-icon">♙</span><span class="nav-copy"><strong>AI Office</strong><em>Watch the team work</em></span></button>
+      <button class="nav-item" data-view="approvals" title="Review and approve important AI work"><span class="nav-icon">✓</span><span class="nav-copy"><strong>Approvals</strong><em>Review before action</em></span><b id="approvalBadge">1</b></button>
+      <button class="nav-item" data-view="usage" title="Review AI generations, models, and token usage"><span class="nav-icon">◫</span><span class="nav-copy"><strong>AI Activity</strong><em>Usage and audit trail</em></span></button>
+      <button class="nav-item" data-view="billing" title="View plans and manage your subscription"><span class="nav-icon">◇</span><span class="nav-copy"><strong>Billing</strong><em>Plans and subscription</em></span></button>
+      <button class="nav-item" data-view="settings" title="Manage your company, account, and connections"><span class="nav-icon">⚙</span><span class="nav-copy"><strong>Settings</strong><em>Company and connections</em></span></button>
+    </nav>
+    <div class="workspace-card"><small>WORKSPACE</small><strong id="workspaceName">New venture</strong><span>Founder plan · Prototype</span></div>
+  </aside>
+
+  <main>
+    <header><div><p class="eyebrow">FOUNDER WORKSPACE</p><h1 id="pageTitle">Mission Control</h1></div><div class="workspace-switcher"><button id="openNotifications" class="notification-trigger" type="button" aria-haspopup="dialog" aria-label="Open founder inbox" title="Founder inbox"><span>♢</span><b id="notificationCount" hidden>0</b></button><button id="openCommand" class="command-trigger" type="button" aria-haspopup="dialog"><span>⌕</span><b>Jump to</b><kbd>⌘ K</kbd></button><select id="workspaceSelect" aria-label="Current workspace"></select><button id="showTour" class="product-tool" type="button" title="Show product tour">?</button><button id="exportWorkspace" class="product-tool" type="button" title="Download workspace backup">⇩</button><button id="renameWorkspace" class="workspace-action" type="button" title="Rename current company">✎</button><button id="deleteWorkspace" class="workspace-action danger" type="button" title="Delete current company">⌫</button><button id="newWorkspace" class="secondary" type="button">+ New company</button><div class="account-control"><small id="authEmail"></small><button id="signOut" class="avatar" title="Sign out">WS</button></div></div></header>
+
+    <section class="view active" id="home">
+      <div class="hero-card">
+        <img class="hero-brand-mark" src="/nova-mark.png" alt="" aria-hidden="true">
+        <div class="hero-copy"><span class="status-pill">● NOVA IS ONLINE</span><h2>Your company,<br><em>moving every day.</em></h2><p>Give Nova.Ai a goal. Your specialist AI employees turn it into research, product, growth, and operations work—with every important action held for your approval.</p><div class="hero-actions"><button class="primary" data-go="team">Assign work <span>→</span></button><button class="secondary" data-go="builder">Build a new company</button></div></div>
+        <div class="operations-preview" aria-label="AI workforce status">
+          <div class="operations-head"><span><i></i> LIVE OPERATIONS</span><b>Today</b></div>
+          <article><span class="employee-avatar">S</span><div><small>STRATEGY</small><strong>Planning the next best move</strong></div><em>Working</em></article>
+          <article><span class="employee-avatar">R</span><div><small>RESEARCH</small><strong>Watching customer signals</strong></div><em>Ready</em></article>
+          <article><span class="employee-avatar">G</span><div><small>GROWTH</small><strong>Preparing launch experiments</strong></div><em>Ready</em></article>
+          <footer><span>Founder approval stays on</span><b>3 employees ready</b></footer>
+        </div>
+      </div>
+      <div class="metrics">
+        <article><small>COMPANY HEALTH</small><strong id="health">—</strong><span>Run your first strategy</span></article>
+        <article><small>ACTIVE AGENTS</small><strong id="agentCount">0</strong><span>Ready when you are</span></article>
+        <article><small>OPEN TASKS</small><strong id="taskCount">0</strong><span>Nothing overdue</span></article>
+        <article class="usage-metric"><small>AI USAGE</small><strong id="aiUsageTotal">0</strong><span id="aiUsageMode">No generations yet</span><button class="metric-link" data-go="usage">View activity →</button></article>
+      </div>
+      <div class="grid-two">
+        <article class="panel"><div class="panel-head"><div><small>LIVE OPERATIONS</small><h3>Activity feed</h3></div><span class="live">● LIVE</span></div><div id="activity" class="empty"><b>No activity yet</b><span>Start with a business idea and your AI team will get to work.</span></div></article>
+        <article class="panel"><div class="panel-head"><div><small>NEXT STEP</small><h3>Launch progress</h3></div><b id="progressText">0%</b></div><div class="progress"><i id="progressBar"></i></div><ol class="steps"><li class="current">Describe your idea</li><li>Generate strategy</li><li>Review assumptions</li><li>Approve launch plan</li></ol></article>
+      </div>
+    </section>
+
+    <section class="view" id="usage">
+      <div class="section-intro activity-intro"><div><p class="eyebrow">AI AUDIT TRAIL</p><h2>Every generation, accounted for.</h2><p>Monitor which models your employees use, token volume, and whether a run was live or safely handled by the fallback engine.</p></div><span>✓ Saved to this workspace</span></div>
+      <div class="usage-summary">
+        <article><small>TOTAL TOKENS</small><strong id="usageTotal">0</strong><span>Across all recorded work</span></article>
+        <article><small>INPUT TOKENS</small><strong id="usageInput">0</strong><span>Instructions and context</span></article>
+        <article><small>OUTPUT TOKENS</small><strong id="usageOutput">0</strong><span>Generated work</span></article>
+        <article><small>LIVE / FALLBACK</small><strong id="usageRuns">0 / 0</strong><span>Provider-backed / safe demo</span></article>
+      </div>
+      <article class="budget-guard panel">
+        <div><small>WORKSPACE GUARDRAIL</small><h3>AI token limit</h3><p>Nova.Ai stops new generations when this company reaches its limit. Raise it only when you are ready for more AI work.</p></div>
+        <div class="budget-control"><label for="aiTokenLimit">Token ceiling</label><select id="aiTokenLimit"><option value="25000">25,000</option><option value="100000">100,000</option><option value="250000">250,000</option><option value="500000">500,000</option><option value="1000000">1,000,000</option></select><button id="toggleAiRuns" class="secondary" type="button">Pause AI runs</button></div>
+        <div class="budget-meter"><div><span id="budgetUsedLabel">0 of 100,000 tokens used</span><b id="budgetPercent">0%</b></div><progress id="budgetProgress" value="0" max="100"></progress><small id="budgetStatus">AI runs are allowed</small></div>
+      </article>
+      <article class="usage-ledger panel">
+        <div class="panel-head"><div><small>RECENT GENERATIONS</small><h3>Workspace activity</h3></div><span class="audit-status">PRIVATE TO WORKSPACE</span></div>
+        <div class="usage-table-head"><span>Work</span><span>Provider &amp; model</span><span>Tokens</span><span>Time</span></div>
+        <div id="usageLedger" class="usage-empty"><b>No AI activity yet</b><span>Generate a strategy or assign work to an AI employee to begin the audit trail.</span><button class="primary" data-go="builder">Start building →</button></div>
+      </article>
+    </section>
+
+    <section class="view" id="office">
+      <div class="section-intro office-intro"><div><p class="eyebrow">LIVE AI OFFICE</p><h2>See your company at work.</h2><p>Each employee has a specialty, a current assignment, and a clear handoff to the rest of the team.</p></div><span><i></i> <b id="officeOnlineLabel">6 employees online</b></span></div>
+      <section class="office-shell">
+        <div class="office-toolbar"><div><span class="office-live-dot"></span><strong>Nova HQ</strong><small>Workday in progress</small></div><div class="office-legend"><span><i class="working"></i>Working</span><span><i class="ready"></i>Ready</span><button class="primary" data-go="team">Assign a job →</button></div></div>
+        <div class="office-floor">
+          <div class="office-zone strategy-zone"><span class="zone-label">STRATEGY</span>
+            <article class="worker-card is-working"><div class="person person-purple"><span class="person-head"></span><span class="person-body"></span><span class="person-arm left"></span><span class="person-arm right"></span></div><div class="desk"><span class="monitor"><i></i><b></b><em></em></span><span class="keyboard"></span></div><div class="worker-info"><strong>Atlas</strong><small>Founder Agent</small><p>Planning the next company milestone</p><span>● Working</span></div><div class="thought">Roadmap ready in 4m</div></article>
+            <article class="worker-card"><div class="person person-blue"><span class="person-head"></span><span class="person-body"></span><span class="person-arm left"></span><span class="person-arm right"></span></div><div class="desk"><span class="monitor"><i></i><b></b><em></em></span><span class="keyboard"></span></div><div class="worker-info"><strong>Scout</strong><small>Research Agent</small><p>Reviewing customer evidence</p><span>● Ready</span></div></article>
+          </div>
+          <div class="office-zone build-zone"><span class="zone-label">PRODUCT</span>
+            <article class="worker-card is-working"><div class="person person-pink"><span class="person-head"></span><span class="person-body"></span><span class="person-arm left"></span><span class="person-arm right"></span></div><div class="desk"><span class="monitor code"><i></i><b></b><em></em></span><span class="keyboard"></span></div><div class="worker-info"><strong>Pixel</strong><small>Builder Agent</small><p>Building the launch experience</p><span>● Working</span></div><div class="thought">Shipping a new page</div></article>
+            <article class="worker-card"><div class="person person-green"><span class="person-head"></span><span class="person-body"></span><span class="person-arm left"></span><span class="person-arm right"></span></div><div class="desk"><span class="monitor"><i></i><b></b><em></em></span><span class="keyboard"></span></div><div class="worker-info"><strong>Shield</strong><small>Reviewer Agent</small><p>Checking quality and safety</p><span>● Ready</span></div></article>
+          </div>
+          <div class="office-zone growth-zone"><span class="zone-label">GROWTH & OPS</span>
+            <article class="worker-card is-working"><div class="person person-orange"><span class="person-head"></span><span class="person-body"></span><span class="person-arm left"></span><span class="person-arm right"></span></div><div class="desk"><span class="monitor"><i></i><b></b><em></em></span><span class="keyboard"></span></div><div class="worker-info"><strong>Spark</strong><small>Marketing Agent</small><p>Drafting the next experiment</p><span>● Working</span></div><div class="thought">3 ideas in review</div></article>
+            <article class="worker-card"><div class="person person-gold"><span class="person-head"></span><span class="person-body"></span><span class="person-arm left"></span><span class="person-arm right"></span></div><div class="desk"><span class="monitor chart"><i></i><b></b><em></em></span><span class="keyboard"></span></div><div class="worker-info"><strong>Metric</strong><small>Analytics Agent</small><p>Watching company performance</p><span>● Ready</span></div></article>
+          </div>
+          <div class="office-runner" aria-hidden="true"><div class="mini-person"><span></span><b></b></div><i>handoff</i></div>
+        </div>
+        <footer class="office-footer"><div><span id="officeWorkingCount">0</span><small>working now</small></div><div><span id="officeReadyCount">6</span><small>ready for work</small></div><div><span id="officeDeliveredCount">0</span><small>latest deliveries</small></div><div class="office-safe"><b>✓ Founder approval on</b><small id="officeRunSummary">Assign a goal and watch the office respond</small></div></footer>
+      </section>
+    </section>
+
+    <section class="view" id="builder">
+      <div class="section-intro"><div><p class="eyebrow">BUSINESS BUILDER</p><h2>Tell us what you want to build.</h2><p>A focused brief helps your AI team produce stronger work.</p></div><span>Step 1 of 4</span></div>
+      <form id="ideaForm" class="builder-form">
+        <label class="wide">What is your business idea?<textarea id="idea" required placeholder="Example: A platform that helps independent real-estate investors find and evaluate off-market properties."></textarea></label>
+        <label>Who is it for?<input id="customer" required placeholder="Independent real-estate investors"></label>
+        <label>How will it make money?<select id="revenue"><option>Monthly subscription</option><option>Transaction fee</option><option>One-time purchase</option><option>Marketplace commission</option></select></label>
+        <label>Starting budget<select id="budget"><option>Under $1,000</option><option>$1,000–$5,000</option><option>$5,000–$15,000</option><option>$15,000+</option></select></label>
+        <label>Primary goal<select id="goal"><option>Validate the idea</option><option>Launch an MVP</option><option>Get first customers</option><option>Prepare for investors</option></select></label>
+        <div id="briefSaveStatus" class="builder-save-state" role="status">Your unfinished brief saves automatically.</div>
+        <button class="primary wide" type="submit" id="generateBtn">Generate launch strategy <span>→</span></button>
+      </form>
+    </section>
+
+    <section class="view" id="studio">
+      <div class="section-intro"><div><p class="eyebrow">LAUNCH STUDIO</p><h2>Turn the strategy into a launch page.</h2><p>Generate a first draft, refine the message, and approve it before anything is published.</p></div><span id="studioStatus">Waiting for plan</span></div>
+      <div id="studioEmpty" class="approval-card studio-empty"><div class="approval-icon">▱</div><h3>Approve a launch plan first</h3><p>Launch Studio uses your reviewed customer, offer and positioning to create a focused page.</p><button class="primary" data-go="builder">Build strategy</button></div>
+      <div id="studioWorkspace" class="studio-workspace" hidden>
+        <aside class="studio-controls">
+          <div><p class="eyebrow">PAGE CONTENT</p><h3>Launch draft</h3></div>
+          <label>Announcement<input id="siteEyebrow" maxlength="70"></label>
+          <label>Headline<textarea id="siteHeadline" maxlength="130"></textarea></label>
+          <label>Supporting message<textarea id="siteSubhead" maxlength="240"></textarea></label>
+          <label>Primary button<input id="siteCta" maxlength="40"></label>
+          <label>Trust statement<input id="siteTrust" maxlength="100"></label>
+          <div class="studio-actions"><button id="regenerateSite" class="secondary">Regenerate</button><button id="saveSite" class="primary">Save draft</button></div>
+        </aside>
+        <div class="preview-shell">
+          <div class="preview-bar"><i></i><i></i><i></i><span>Nova.Ai launch preview</span></div>
+          <article id="sitePreview" class="site-preview"></article>
+        </div>
+        <div class="publish-gate"><div><small>HUMAN APPROVAL REQUIRED</small><strong id="publishTitle">Draft not approved</strong><span>Publishing stays locked until you approve this exact draft.</span></div><button id="approveSite" class="primary">Approve launch page →</button></div>
+        <div class="publish-console"><div><small>PUBLICATION</small><h3 id="publicPageStatus">Not published</h3><a id="publicPageLink" target="_blank" rel="noopener" hidden></a></div><div class="publish-stats"><span><b id="pageViews">0</b> visits</span><span><b id="pageSignups">0</b> signups</span><span><b id="pageConversion">0%</b> conversion</span></div><div class="publish-buttons"><button id="unpublishSite" class="secondary" hidden>Unpublish</button><button id="publishSite" class="primary">Publish page →</button></div></div>
+        <article class="panel lead-inbox"><div class="panel-head"><div><small>EARLY-ACCESS LEADS</small><h3>Signup inbox</h3></div><div class="lead-tools"><label>Show<select id="leadFilter"><option value="all">All leads</option><option value="new">New</option><option value="contacted">Contacted</option><option value="qualified">Qualified</option><option value="archived">Archived</option></select></label><button id="exportLeads" class="secondary" type="button" disabled>Export CSV</button></div></div><div id="leadList" class="lead-list"><div class="lead-empty">Publish your page and share it to start collecting signups.</div></div></article>
+      </div>
+    </section>
+
+    <section class="view" id="validation">
+      <div class="section-intro"><div><p class="eyebrow">CUSTOMER VALIDATION</p><h2>Replace assumptions with evidence.</h2><p>Interview real customers, score the signals, and let Nova.Ai recommend the next move.</p></div><span id="validationCount">0 interviews</span></div>
+      <div class="validation-metrics"><article><small>EVIDENCE SCORE</small><strong id="evidenceScore">0%</strong><span id="evidenceLabel">Not enough evidence</span></article><article><small>DEMAND</small><strong id="demandAverage">—</strong><span>Problem frequency</span></article><article><small>URGENCY</small><strong id="urgencyAverage">—</strong><span>Need to solve now</span></article><article><small>WILLINGNESS TO PAY</small><strong id="willingnessAverage">—</strong><span>Commercial signal</span></article></div>
+      <div class="validation-grid">
+        <article class="panel interview-guide"><div class="panel-head"><div><small>RESEARCH AGENT</small><h3>Interview guide</h3></div><button id="copyQuestions" class="secondary">Copy</button></div><ol id="interviewQuestions"></ol></article>
+        <article class="panel recommendation-card"><small>NOVA.AI RECOMMENDATION</small><div id="recommendationIcon">○</div><h3 id="recommendationTitle">Collect five interviews</h3><p id="recommendationText">Evidence beats enthusiasm. Start by speaking with target customers.</p></article>
+      </div>
+      <div class="validation-grid lower">
+        <form id="evidenceForm" class="panel evidence-form"><div><small>ADD EVIDENCE</small><h3>Record an interview</h3></div><label>Name<input id="respondentName" required maxlength="100" placeholder="Customer name or alias"></label><label>Email <span>optional</span><input id="respondentEmail" type="email" maxlength="254" placeholder="customer@example.com"></label><label class="full">What did you learn?<textarea id="validationNotes" required maxlength="4000" placeholder="Capture exact problems, current alternatives, objections and pricing reactions."></textarea></label><div class="score-fields"><label>Demand<select id="demandScore"><option value="1">1 · Weak</option><option value="2">2</option><option value="3" selected>3 · Mixed</option><option value="4">4</option><option value="5">5 · Strong</option></select></label><label>Urgency<select id="urgencyScore"><option value="1">1 · Weak</option><option value="2">2</option><option value="3" selected>3 · Mixed</option><option value="4">4</option><option value="5">5 · Strong</option></select></label><label>Willingness<select id="willingnessScore"><option value="1">1 · Weak</option><option value="2">2</option><option value="3" selected>3 · Mixed</option><option value="4">4</option><option value="5">5 · Strong</option></select></label></div><button class="primary full" type="submit">Save validation evidence →</button></form>
+        <article class="panel evidence-list-panel"><div class="panel-head"><div><small>INTERVIEW LOG</small><h3>Evidence collected</h3></div></div><div id="evidenceList" class="empty"><b>No interviews yet</b><span>Your customer evidence will appear here.</span></div></article>
+      </div>
+    </section>
+
+    <section class="view" id="team">
+      <div class="section-intro"><div><p class="eyebrow">AI WORKFORCE</p><h2>Your company’s operating team.</h2><p>Assign one business outcome. Nova’s specialist employees divide the work, coordinate their deliverables, and bring important actions back for approval.</p></div><span>Founder supervised</span></div>
+      <section class="work-queue panel"><div class="panel-head"><div><small>UP NEXT</small><h3>Employee work queue</h3></div><span id="workQueueCount">0 queued</span></div><div id="workQueue" class="queue-empty"><b>No work queued</b><span>Save an assignment for later or run it immediately.</span></div></section>
+      <section class="workforce-console">
+        <form id="workforceForm" class="workforce-brief">
+          <div><p class="eyebrow">ASSIGN WORK</p><h3>What should the team accomplish?</h3><span>Give the team a concrete outcome, not a vague idea.</span></div>
+          <label>Company objective<textarea id="workforceGoal" required maxlength="1200" placeholder="Example: Create a 14-day plan to recruit our first five paying design partners."></textarea></label>
+          <div class="workforce-options"><label>Lead department<select id="workforceDepartment"><option value="company">Whole company</option><option value="strategy">Strategy</option><option value="research">Research</option><option value="product">Product</option><option value="marketing">Marketing & sales</option><option value="operations">Operations</option></select></label><label>Priority<select id="workforcePriority"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div>
+          <div class="quick-jobs"><small>TODAY’S JOBS</small><button type="button" data-quick-job="validation">Validate customer demand</button><button type="button" data-quick-job="launch">Prepare the next launch step</button><button type="button" data-quick-job="leads">Follow up with interested leads</button></div>
+          <div class="assignment-actions"><button id="queueWorkforce" class="secondary" type="button">Queue for later</button><button id="runWorkforce" class="primary" type="submit">Assign to AI employees <span>→</span></button></div>
+        </form>
+        <div class="workforce-live"><div class="panel-head"><div><small>EMPLOYEE RUN</small><h3>Operations room</h3></div><span id="workforceStatus" class="workforce-status">Ready</span></div><div id="workforceResults" class="workforce-empty"><b>No assignment running</b><span>Your employees’ work and handoffs will appear here.</span></div></div>
+      </section>
+      <section class="workforce-history panel"><div class="panel-head"><div><small>COMPANY MEMORY</small><h3>Past assignments</h3></div><span id="workforceHistoryCount">0 runs</span></div><div id="workforceHistory" class="history-empty">Completed employee runs will be retained here.</div></section>
+      <div id="agentGrid" class="agent-grid"></div>
+      <article class="panel provider-panel">
+        <div class="panel-head"><div><small>MODEL ROUTER</small><h3>Provider readiness</h3></div></div>
+        <div id="providerGrid" class="provider-grid">Checking provider status…</div>
+      </article>
+    </section>
+
+    <section class="view" id="approvals">
+      <div class="section-intro"><div><p class="eyebrow">HUMAN CONTROL</p><h2>Review before anything moves.</h2><p>Nothing is published, sent, purchased or deployed without your approval.</p></div></div>
+      <div id="employeeApprovals" class="employee-approvals" hidden></div>
+      <div id="approvalContent" class="approval-card"><div class="approval-icon">⌁</div><h3>No launch plan yet</h3><p>Generate a strategy and its reviewed output will appear here.</p><button class="primary" data-go="builder">Create strategy</button></div>
+    </section>
+
+    <section class="view" id="billing">
+      <div class="section-intro"><div><p class="eyebrow">NOVA.AI PLANS</p><h2>Choose the team that fits your ambition.</h2><p>Every plan keeps you in control. Upgrade, downgrade or cancel through Stripe’s secure portal.</p></div><span id="billingState" class="billing-state">Checking billing…</span></div>
+      <div class="pricing-grid">
+        <article class="price-card"><p class="eyebrow">STARTER</p><h3>$29 <small>/ month</small></h3><p>Turn one promising idea into a focused, reviewable launch plan.</p><ul><li>1 active company</li><li>Core AI founder team</li><li>100,000-token workspace ceiling</li></ul><button class="secondary plan-button" data-plan="starter">Choose Starter</button></article>
+        <article class="price-card featured"><span class="popular">MOST POPULAR</span><p class="eyebrow">BUILDER</p><h3>$79 <small>/ month</small></h3><p>Build and iterate with more companies, agents and monthly capacity.</p><ul><li>5 active companies</li><li>Full specialist AI team</li><li>500,000-token workspace ceiling</li></ul><button class="primary plan-button" data-plan="builder">Choose Builder</button></article>
+        <article class="price-card"><p class="eyebrow">OPERATOR</p><h3>$199 <small>/ month</small></h3><p>Operate a portfolio with advanced workflows and generous capacity.</p><ul><li>Unlimited companies</li><li>Advanced agent workflows</li><li>2,000,000-token workspace ceiling</li></ul><button class="secondary plan-button" data-plan="operator">Choose Operator</button></article>
+      </div>
+      <article class="panel subscription-panel"><div><small>CURRENT ACCESS</small><h3 id="currentPlan">Checking access…</h3><p id="currentPlanDetail">Loading your Nova.Ai entitlement.</p><div id="entitlementBenefits" class="entitlement-benefits"></div></div><button id="manageBilling" class="secondary" hidden>Manage subscription</button></article>
+    </section>
+
+    <section class="view" id="settings">
+      <div class="section-intro"><div><p class="eyebrow">PLATFORM SETTINGS</p><h2>Keep your company in control.</h2><p>Manage workspace details, account security, AI safeguards, and the services powering Nova.Ai.</p></div><span id="settingsStatus">Checking connections…</span></div>
+      <div class="settings-grid">
+        <article class="panel settings-company"><div class="settings-heading"><span>01</span><div><small>COMPANY</small><h3 id="settingsCompanyName">New venture</h3><p>These controls only affect the currently selected company.</p></div></div><div class="settings-actions"><button id="settingsRename" class="secondary" type="button">Rename company</button><button id="settingsExport" class="secondary" type="button">Download backup</button><button id="settingsDelete" class="settings-danger" type="button">Delete company</button></div></article>
+        <article class="panel settings-account"><div class="settings-heading"><span>02</span><div><small>ACCOUNT &amp; SECURITY</small><h3 id="settingsEmail">Founder account</h3><p>Reset your password securely through your verified email address.</p></div></div><button id="settingsResetPassword" class="secondary" type="button">Send password-reset email</button></article>
+        <article class="panel settings-ai"><div class="settings-heading"><span>03</span><div><small>AI SAFEGUARDS</small><h3>Founder-controlled limits</h3><p>Review token usage, pause AI employees, or change the workspace ceiling.</p></div></div><div class="settings-ai-state"><span id="settingsAiState">AI runs allowed</span><b id="settingsAiUsage">0 tokens used</b></div><button class="primary" type="button" data-go="usage">Open AI guardrail →</button></article>
+        <article class="panel settings-connections"><div class="settings-heading"><span>04</span><div><small>CONNECTIONS</small><h3>Platform readiness</h3><p>Nova.Ai checks each service without exposing private credentials.</p></div></div><div id="settingsConnections" class="connection-list"><div class="connection-loading">Checking services…</div></div><button id="refreshSettings" class="secondary" type="button">Refresh status</button></article>
+      </div>
+    </section>
+  </main>
+  <div class="auth-overlay" aria-label="Nova.Ai account access">
+    <section class="auth-card">
+      <span class="brand auth-brand"><img src="/nova-mark.png" alt=""><b><span>NOVA</span><em>.ai</em></b></span>
+      <h2>Welcome to your founder workspace.</h2>
+      <p>Sign in to access your companies, launch plans and AI team.</p>
+      <a class="auth-learn" href="/welcome">Learn about Nova.Ai →</a>
+      <div class="auth-modes" role="tablist" aria-label="Account access">
+        <button type="button" role="tab" data-auth-mode="signin" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" data-auth-mode="signup" aria-selected="false">Create account</button>
+      </div>
+      <form id="authForm">
+        <label>Email<input id="authEmailInput" type="email" autocomplete="email" required></label>
+        <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <p id="authPasswordHint" class="auth-password-hint" hidden>Use 12+ characters with uppercase, lowercase, a number, and a symbol.</p>
+        <label id="authConsent" class="auth-consent" hidden><input id="authConsentInput" type="checkbox"> <span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms</a> and acknowledge the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+        <button id="authSubmit" class="primary auth-submit" type="submit" value="signin">Sign in →</button>
+        <button id="forgotPassword" class="auth-link" type="button">Forgot your password?</button>
+        <div id="authMessage" class="auth-message" role="status"></div>
+      </form>
+    </section>
+  </div>
+  <div id="toast" role="status"></div>
+  <div id="commandPalette" class="command-overlay" role="dialog" aria-modal="true" aria-labelledby="commandTitle" hidden>
+    <section class="command-card">
+      <div class="command-search"><span>⌕</span><input id="commandInput" type="search" autocomplete="off" placeholder="Search Nova.Ai…" aria-label="Search platform pages"><kbd>ESC</kbd></div>
+      <div class="command-heading"><span id="commandTitle">GO TO</span><small>Type to filter</small></div>
+      <div id="commandResults" class="command-results" role="listbox"></div>
+      <footer><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>↵</kbd> Open</span><span>Nova.Ai command menu</span></footer>
+    </section>
+  </div>
+  <div id="notificationOverlay" class="notification-overlay" hidden>
+    <aside class="notification-drawer" role="dialog" aria-modal="true" aria-labelledby="notificationTitle">
+      <header><div><small>FOUNDER INBOX</small><h2 id="notificationTitle">What needs attention</h2></div><button id="closeNotifications" type="button" aria-label="Close founder inbox">×</button></header>
+      <div id="notificationSummary" class="notification-summary"></div>
+      <div id="notificationList" class="notification-list"></div>
+      <footer><span>Nova.Ai only surfaces actionable company signals.</span></footer>
+    </aside>
+  </div>
+  <div id="onboarding" class="onboarding-overlay" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <section class="onboarding-card">
+      <div class="onboarding-visual"><img class="onboarding-mark" src="/nova-mark.png" alt="Nova.Ai eclipse mark"><small id="onboardingEyebrow">WELCOME TO NOVA.AI</small><h2 id="onboardingTitle">Build your company one approved step at a time.</h2></div>
+      <div class="onboarding-content">
+        <p id="onboardingText"></p>
+        <div id="onboardingPoints" class="onboarding-points"></div>
+        <div class="onboarding-footer"><div id="onboardingDots" class="onboarding-dots" aria-hidden="true"></div><div class="onboarding-buttons"><button id="skipOnboarding" class="secondary" type="button">Not now</button><button id="nextOnboarding" class="primary" type="button">Continue →</button></div></div>
+      </div>
+    </section>
+  </div>
+  <script src="auth.js"></script>
+  <script src="app.js"></script>
+  <script src="billing-client.js"></script>
+  <script src="validation.js"></script>
+</body>
+</html>

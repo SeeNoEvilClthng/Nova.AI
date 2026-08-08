@@ -1,0 +1,8 @@
+.workspace-switcher { display: flex; align-items: center; gap: 9px; }
+.workspace-switcher select { min-width: 180px; width: auto; background: #fff; padding: 10px 34px 10px 12px; }
+.workspace-switcher .secondary { padding: 10px 13px; }
+@media (max-width: 700px) {
+  .workspace-switcher select { min-width: 125px; max-width: 150px; }
+  .workspace-switcher .secondary { font-size: 0; }
+  .workspace-switcher .secondary::after { content: "+"; font-size: 18px; }
+}

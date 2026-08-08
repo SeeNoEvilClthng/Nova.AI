@@ -1,0 +1,9 @@
+data/nova.db
+data/nova.db-shm
+data/nova.db-wal
+node_modules/
+.env
+.vercel
+.env.local
+.env*
+!.env.example

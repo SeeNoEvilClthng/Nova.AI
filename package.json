@@ -1,0 +1,17 @@
+{
+  "name": "nova-ai-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "ai": "^7.0.47",
+    "express": "5.1.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "check": "node --check server.js && node --check database.js && node --check supabase.js && node --check billing.js && node --check router.js && node --check auth.js && node --check app.js && node --check billing-client.js",
+    "test": "node --test *.test.js"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

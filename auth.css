@@ -1,0 +1,23 @@
+.auth-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: radial-gradient(circle at 70% 10%, #6256dc 0, transparent 30%), #0e1424; place-items: center; padding: 20px; }
+.auth-required .auth-overlay { display: grid; }
+.auth-card { width: min(430px, 100%); background: #fff; border-radius: 20px; padding: 34px; box-shadow: 0 25px 70px #0007; }
+.auth-card .brand { color: var(--ink); display: inline-block; margin-bottom: 26px; }
+.auth-card h2 { font: 700 28px Manrope; margin: 0 0 8px; }
+.auth-card > p { color: var(--muted); margin-bottom: 24px; }
+.auth-card form { display: grid; gap: 14px; }
+.auth-card label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
+.auth-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 0 20px; padding: 4px; border-radius: 12px; background: #f0f1f5; }
+.auth-modes button { min-height: 38px; border: 0; border-radius: 9px; background: transparent; color: #747b8d; font: 700 12px Manrope; cursor: pointer; }
+.auth-modes button[aria-selected="true"] { background: #fff; color: #231e48; box-shadow: 0 3px 12px #1e25421a; }
+.auth-submit { width: 100%; justify-content: center; margin-top: 3px; }
+.auth-password-hint { margin: -7px 0 0; color: #727b8d; font-size: 11px; line-height: 1.5; }
+.auth-consent { grid-template-columns: auto 1fr !important; align-items: start; gap: 9px !important; color: #60697c; font-weight: 500 !important; line-height: 1.45; }
+.auth-consent input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: #725ff0; }
+.auth-consent a { color: #6650d9; }
+.auth-link { border: 0; background: transparent; color: #6650d9; padding: 2px; justify-self: start; font: 700 12px Manrope; cursor: pointer; }
+.auth-link:hover { text-decoration: underline; }
+.auth-message { min-height: 20px; color: #b44343; font-size: 12px; }
+.account-control { display: flex; align-items: center; gap: 8px; }
+.account-control small { color: var(--muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.avatar { cursor: pointer; }
+.auth-learn{display:inline-block;margin:-6px 0 18px;color:#7664ec;font-size:11px;font-weight:600;text-decoration:none}.auth-learn:hover{color:#9486f5}

@@ -1,0 +1,6 @@
+.workspace-switcher { display: flex; align-items: center; gap: 8px; }
+.workspace-switcher select { width: min(230px, 28vw); }
+.workspace-action { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--muted); cursor: pointer; font-size: 16px; }
+.workspace-action:hover { color: var(--purple); border-color: #cfc9fa; }
+.workspace-action.danger:hover { color: #b44343; border-color: #efc7c7; background: #fff7f7; }
+@media (max-width: 760px) { .workspace-action { display: none; } .workspace-switcher select { width: 150px; } }
