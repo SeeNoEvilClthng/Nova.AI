@@ -2,12 +2,30 @@ const authState = { config: null, session: null };
 const sessionKey = "nova.supabase.session";
 const selectedPlanKey = "nova.selectedPlan";
 let authMode = "signin";
+let sessionRefreshTimer = null;
+let refreshPromise = null;
 
 function authHeaders(extra = {}) {
   return authState.session?.access_token ? { ...extra, Authorization: `Bearer ${authState.session.access_token}` } : extra;
 }
 
-window.authFetch = (url, options = {}) => fetch(url, { ...options, headers: authHeaders(options.headers || {}) });
+async function refreshSession() {
+  if (!authState.session?.refresh_token) return false;
+  if (!refreshPromise) refreshPromise = supabaseAuth("/auth/v1/token?grant_type=refresh_token", { refresh_token:authState.session.refresh_token }).then(session => { storeSession(session);return true; }).catch(() => { clearSession();return false; }).finally(() => { refreshPromise=null; });
+  return refreshPromise;
+}
+
+async function ensureFreshSession() {
+  const expiresAt=Number(authState.session?.expires_at||0)*1000;
+  if (expiresAt && expiresAt-Date.now()<60_000) await refreshSession();
+}
+
+window.authFetch = async (url, options = {}) => {
+  await ensureFreshSession();
+  let response=await fetch(url,{...options,headers:authHeaders(options.headers||{})});
+  if(response.status===401&&authState.config?.supabase.enabled&&await refreshSession())response=await fetch(url,{...options,headers:authHeaders(options.headers||{})});
+  return response;
+};
 
 async function supabaseAuth(path, body) {
   const { url, publishableKey } = authState.config.supabase;
@@ -90,19 +108,29 @@ function setAuthMode(mode) {
 function storeSession(session) {
   authState.session = session;
   localStorage.setItem(sessionKey, JSON.stringify(session));
+  clearTimeout(sessionRefreshTimer);
+  const expiresAt=Number(session?.expires_at||0)*1000,delay=Math.max(10_000,expiresAt-Date.now()-60_000);
+  if(expiresAt)sessionRefreshTimer=setTimeout(refreshSession,delay);
   document.body.classList.toggle("auth-required", !session);
   if (session?.user?.email) document.getElementById("authEmail").textContent = session.user.email;
 }
 
+function clearSession() {
+  clearTimeout(sessionRefreshTimer);
+  authState.session=null;
+  localStorage.removeItem(sessionKey);
+  document.body.classList.add("auth-required");
+}
+
 async function restoreSession() {
-  const saved = JSON.parse(localStorage.getItem(sessionKey) || "null");
+  let saved=null;
+  try { saved=JSON.parse(localStorage.getItem(sessionKey)||"null"); } catch { clearSession(); }
   if (!saved?.refresh_token) return false;
+  authState.session=saved;
   try {
-    const session = await supabaseAuth("/auth/v1/token?grant_type=refresh_token", { refresh_token: saved.refresh_token });
-    storeSession(session);
-    return true;
+    return await refreshSession();
   } catch {
-    localStorage.removeItem(sessionKey);
+    clearSession();
     return false;
   }
 }
@@ -192,7 +220,7 @@ document.getElementById("signOut").onclick = async () => {
   try {
     await fetch(`${authState.config.supabase.url}/auth/v1/logout`, { method: "POST", headers: authHeaders({ apikey: authState.config.supabase.publishableKey }) });
   } finally {
-    localStorage.removeItem(sessionKey);
+    clearSession();
     location.reload();
   }
 };
