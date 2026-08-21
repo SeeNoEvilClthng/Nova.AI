@@ -97,6 +97,36 @@ function productionReady() {
 }
 productionReady();
 
+function instagramConfig() {
+  const graphVersion = String(process.env.META_GRAPH_VERSION || "v26.0").trim();
+  const accessToken = String(process.env.INSTAGRAM_ACCESS_TOKEN || "").trim();
+  if (!accessToken || !/^v\d+\.\d+$/.test(graphVersion)) return null;
+  return {
+    graphVersion,
+    accessToken,
+    accountId: String(process.env.META_INSTAGRAM_USER_ID || "").trim(),
+    username: String(process.env.META_INSTAGRAM_USERNAME || "").trim().replace(/^@/, "").toLowerCase()
+  };
+}
+
+async function publishInstagram(campaign) {
+  const config = instagramConfig();
+  if (!config) throw Object.assign(new Error("Add the Instagram access token to Vercel before publishing"), { status: 503 });
+  if (!/^https:\/\//.test(String(campaign.mediaUrl || ""))) throw Object.assign(new Error("Approve this content again to prepare its public graphic"), { status: 409 });
+  const base = `https://graph.instagram.com/${config.graphVersion}`, headers = { Authorization: `Bearer ${config.accessToken}` };
+  const identityResponse = await fetch(`${base}/me?fields=user_id,username`, { headers }), identity = await identityResponse.json();
+  if (!identityResponse.ok) throw new Error(identity?.error?.message || "Instagram rejected the saved access token");
+  const accountId = String(config.accountId || identity.user_id || identity.id || "");
+  if (!accountId) throw new Error("Instagram did not return a professional account ID");
+  if (config.username && String(identity.username || "").toLowerCase() !== config.username) throw new Error(`The saved Instagram token belongs to @${identity.username || "another account"}, not @${config.username}`);
+  const createBody = new URLSearchParams({ image_url: campaign.mediaUrl, caption: String(campaign.caption || "").slice(0, 2200), is_ai_generated: "true" });
+  const createResponse = await fetch(`${base}/${accountId}/media`, { method: "POST", headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" }, body: createBody }), created = await createResponse.json();
+  if (!createResponse.ok || !created.id) throw new Error(created?.error?.message || "Instagram could not prepare the approved post");
+  const publishResponse = await fetch(`${base}/${accountId}/media_publish`, { method: "POST", headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ creation_id: String(created.id) }) }), published = await publishResponse.json();
+  if (!publishResponse.ok) throw new Error(published?.error?.message || "Instagram rejected the approved post");
+  return String(published.id || "");
+}
+
 function sendJson(res, status, value) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(value));
@@ -393,6 +423,31 @@ app.use(async (req, res) => {
     } catch (error) { return sendJson(res, error.status || 500, { error: error.message }); }
   }
   if (pathname === "/api/providers" && req.method === "GET") return sendJson(res, 200, router.providerStatus());
+  if (pathname === "/api/reseller/social/status" && req.method === "GET") {
+    try {
+      const workspaceId=requestUrl.searchParams.get("workspace"),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
+      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions),instagramReady=Boolean(instagramConfig());
+      return sendJson(res,200,{publishAllowed:permissions.marketing.publish,networks:[{id:"x",name:"X",configured:false,publishing:false,reason:"Connect X before publishing"},{id:"facebook",name:"Facebook",configured:false,publishing:false,reason:"Connect Facebook before publishing"},{id:"instagram",name:"Instagram",configured:instagramReady,publishing:instagramReady,reason:"Add the Instagram professional account token"}]});
+    }catch(error){return sendJson(res,error.status||500,{error:error.message||"Social connections could not load"});}
+  }
+  if (pathname === "/api/reseller/social/publish" && req.method === "POST") {
+    try {
+      const input=await readBody(req),workspaceId=String(input.workspaceId||""),campaignId=String(input.campaignId||""),platform=String(input.platform||""),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
+      if(platform!=="instagram")return sendJson(res,503,{error:`Connect ${platform} before publishing`});
+      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions);if(!permissions.marketing.publish)return sendJson(res,403,{error:"Enable Marketing publish permission in Connections before posting"});
+      const campaigns=Array.isArray(workspace.state?.resellerStudio?.contentCampaigns)?workspace.state.resellerStudio.contentCampaigns:[],campaign=campaigns.find(item=>item.id===campaignId);
+      if(!campaign)return sendJson(res,404,{error:"Content item not found"});
+      if(!["approved","published"].includes(campaign.status))return sendJson(res,409,{error:"Approve this content before publishing"});
+      if(!Array.isArray(campaign.platforms)||!campaign.platforms.includes(platform))return sendJson(res,400,{error:"Instagram is not selected for this content"});
+      if((campaign.receipts||[]).some(item=>item.platform===platform))return sendJson(res,409,{error:"This content has already been published to Instagram"});
+      if(supabase.configured())await supabase.verifyUser(req);
+      const postId=await publishInstagram(campaign),publishedAt=new Date().toISOString();campaign.receipts=[...(campaign.receipts||[]),{platform,postId,publishedAt}];campaign.status=campaign.platforms.every(network=>campaign.receipts.some(item=>item.platform===network))?"published":"approved";if(campaign.status==="published")campaign.publishedAt=publishedAt;
+      const state={...(workspace.state||{}),resellerStudio:{...(workspace.state?.resellerStudio||{}),contentCampaigns:campaigns}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);
+      return sendJson(res,200,{published:true,platform,postId,campaign});
+    }catch(error){return sendJson(res,error.status||502,{error:error.message||"Approved content could not be published"});}
+  }
   if (pathname === "/api/reseller/listings" && req.method === "POST") {
     try {
       if(rateLimited(req,"reseller-listings",20))return sendJson(res,429,{error:"The Listing Agent reached its hourly preparation limit"});
