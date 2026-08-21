@@ -127,6 +127,20 @@ async function publishInstagram(campaign) {
   return String(published.id || "");
 }
 
+async function verifyInstagramConnection() {
+  const config = instagramConfig();
+  if (!config) return { configured: false, publishing: false, reason: "Add the Instagram professional account token" };
+  try {
+    const response = await fetch(`https://graph.instagram.com/${config.graphVersion}/me?fields=user_id,username`, { headers: { Authorization: `Bearer ${config.accessToken}` } }), identity = await response.json();
+    if (!response.ok) return { configured: true, publishing: false, reason: identity?.error?.message || "Instagram rejected the saved token" };
+    const username = String(identity.username || "").toLowerCase();
+    if (config.username && username !== config.username) return { configured: true, publishing: false, reason: `Token belongs to @${username || "another account"}, not @${config.username}` };
+    return { configured: true, publishing: true, accountLabel: username ? `Connected as @${username}` : "Connected professional account", accountId: String(identity.user_id || identity.id || "") };
+  } catch {
+    return { configured: true, publishing: false, reason: "Instagram could not be reached. Try the readiness check again." };
+  }
+}
+
 function sendJson(res, status, value) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(value));
@@ -427,8 +441,8 @@ app.use(async (req, res) => {
     try {
       const workspaceId=requestUrl.searchParams.get("workspace"),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
       if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
-      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions),instagramReady=Boolean(instagramConfig());
-      return sendJson(res,200,{publishAllowed:permissions.marketing.publish,networks:[{id:"x",name:"X",configured:false,publishing:false,reason:"Connect X before publishing"},{id:"facebook",name:"Facebook",configured:false,publishing:false,reason:"Connect Facebook before publishing"},{id:"instagram",name:"Instagram",configured:instagramReady,publishing:instagramReady,reason:"Add the Instagram professional account token"}]});
+      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions),instagram=await verifyInstagramConnection();
+      return sendJson(res,200,{publishAllowed:permissions.marketing.publish,networks:[{id:"x",name:"X",configured:false,publishing:false,reason:"Connect X before publishing"},{id:"facebook",name:"Facebook",configured:false,publishing:false,reason:"Connect Facebook before publishing"},{id:"instagram",name:"Instagram",...instagram}]});
     }catch(error){return sendJson(res,error.status||500,{error:error.message||"Social connections could not load"});}
   }
   if (pathname === "/api/reseller/social/publish" && req.method === "POST") {
