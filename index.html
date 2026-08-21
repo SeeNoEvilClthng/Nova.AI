@@ -27,27 +27,50 @@
   <link rel="stylesheet" href="command-menu.css">
   <link rel="stylesheet" href="notifications.css">
   <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="founder-focus.css">
+  <link rel="stylesheet" href="founder-focus-theme.css">
+  <link rel="stylesheet" href="company-memory.css">
+  <link rel="stylesheet" href="company-memory-theme.css">
+  <link rel="stylesheet" href="operating-rhythm.css">
+  <link rel="stylesheet" href="goals-metrics.css">
+  <link rel="stylesheet" href="goals-metrics-live.css">
+  <link rel="stylesheet" href="revenue.css">
+  <link rel="stylesheet" href="execution-engine.css">
+  <link rel="stylesheet" href="minimal-ui.css">
+  <link rel="stylesheet" href="durable-missions.css">
+  <link rel="stylesheet" href="connections.css">
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="#" aria-label="Nova.Ai home"><img src="/nova-mark.png" alt=""><b><span>NOVA</span><em>.ai</em></b><i>LIVE</i></a>
     <nav>
-      <button class="nav-item active" data-view="home" aria-current="page" title="See company health and current activity"><span class="nav-icon">⌂</span><span class="nav-copy"><strong>Mission Control</strong><em>Overview and progress</em></span></button>
-      <button class="nav-item" data-view="builder" title="Turn your business idea into a launch strategy"><span class="nav-icon">✦</span><span class="nav-copy"><strong>Business Builder</strong><em>Create your strategy</em></span></button>
-      <button class="nav-item" data-view="studio" title="Create, publish, and manage your launch page"><span class="nav-icon">▱</span><span class="nav-copy"><strong>Launch Studio</strong><em>Build and publish</em></span></button>
-      <button class="nav-item" data-view="validation" title="Record customer interviews and demand signals"><span class="nav-icon">⌕</span><span class="nav-copy"><strong>Validation</strong><em>Test customer demand</em></span></button>
-      <button class="nav-item" data-view="team" title="View the AI agents working on your company"><span class="nav-icon">◉</span><span class="nav-copy"><strong>AI Team</strong><em>Agents and providers</em></span></button>
-      <button class="nav-item" data-view="office" title="Watch your AI employees work"><span class="nav-icon">♙</span><span class="nav-copy"><strong>AI Office</strong><em>Watch the team work</em></span></button>
+      <span class="nav-section-label">RUN YOUR COMPANY</span>
+      <button class="nav-item active" data-view="home" aria-current="page" title="See company health and current activity"><span class="nav-icon">⌂</span><span class="nav-copy"><strong>Mission Control</strong><em>Overview and next step</em></span></button>
+      <button class="nav-item" data-view="autopilot" title="Move company goals through verified AI execution"><span class="nav-icon">⚡</span><span class="nav-copy"><strong>Autopilot</strong><em>Execute and verify</em></span></button>
+      <button class="nav-item" data-view="team" title="Assign work to your AI employees"><span class="nav-icon">◉</span><span class="nav-copy"><strong>AI Team</strong><em>Assign employee work</em></span></button>
       <button class="nav-item" data-view="approvals" title="Review and approve important AI work"><span class="nav-icon">✓</span><span class="nav-copy"><strong>Approvals</strong><em>Review before action</em></span><b id="approvalBadge">1</b></button>
-      <button class="nav-item" data-view="usage" title="Review AI generations, models, and token usage"><span class="nav-icon">◫</span><span class="nav-copy"><strong>AI Activity</strong><em>Usage and audit trail</em></span></button>
-      <button class="nav-item" data-view="billing" title="View plans and manage your subscription"><span class="nav-icon">◇</span><span class="nav-copy"><strong>Billing</strong><em>Plans and subscription</em></span></button>
-      <button class="nav-item" data-view="settings" title="Manage your company, account, and connections"><span class="nav-icon">⚙</span><span class="nav-copy"><strong>Settings</strong><em>Company and connections</em></span></button>
+      <button class="nav-item" data-view="revenue" title="Create offers and track company revenue"><span class="nav-icon">$</span><span class="nav-copy"><strong>Revenue</strong><em>Offers and orders</em></span></button>
+      <details class="nav-more" id="navMore"><summary><span>•••</span><strong>More tools</strong><small>Build, measure & settings</small></summary><div>
+        <span class="nav-section-label">BUILD & LEARN</span>
+        <button class="nav-item" data-view="builder"><span class="nav-icon">✦</span><span class="nav-copy"><strong>Business Builder</strong><em>Create your strategy</em></span></button>
+        <button class="nav-item" data-view="studio"><span class="nav-icon">▱</span><span class="nav-copy"><strong>Launch Studio</strong><em>Build and publish</em></span></button>
+        <button class="nav-item" data-view="validation"><span class="nav-icon">⌕</span><span class="nav-copy"><strong>Validation</strong><em>Test customer demand</em></span></button>
+        <button class="nav-item" data-view="memory"><span class="nav-icon">◈</span><span class="nav-copy"><strong>Company Memory</strong><em>Shared business context</em></span></button>
+        <button class="nav-item" data-view="goals"><span class="nav-icon">◎</span><span class="nav-copy"><strong>Goals & Metrics</strong><em>Outcomes and KPIs</em></span></button>
+        <span class="nav-section-label">SYSTEM</span>
+        <button class="nav-item" data-view="office"><span class="nav-icon">♙</span><span class="nav-copy"><strong>AI Office</strong><em>Watch the team work</em></span></button>
+        <button class="nav-item" data-view="usage"><span class="nav-icon">◫</span><span class="nav-copy"><strong>AI Activity</strong><em>Usage and audit trail</em></span></button>
+        <button class="nav-item" data-view="connections"><span class="nav-icon">⌁</span><span class="nav-copy"><strong>Connections</strong><em>Tools and permissions</em></span></button>
+        <button class="nav-item" data-view="billing"><span class="nav-icon">◇</span><span class="nav-copy"><strong>Billing</strong><em>Plans and subscription</em></span></button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-copy"><strong>Settings</strong><em>Company and connections</em></span></button>
+      </div></details>
     </nav>
     <div class="workspace-card"><small>WORKSPACE</small><strong id="workspaceName">New venture</strong><span>Founder plan · Prototype</span></div>
   </aside>
 
   <main>
-    <header><div><p class="eyebrow">FOUNDER WORKSPACE</p><h1 id="pageTitle">Mission Control</h1></div><div class="workspace-switcher"><button id="openNotifications" class="notification-trigger" type="button" aria-haspopup="dialog" aria-label="Open founder inbox" title="Founder inbox"><span>♢</span><b id="notificationCount" hidden>0</b></button><button id="openCommand" class="command-trigger" type="button" aria-haspopup="dialog"><span>⌕</span><b>Jump to</b><kbd>⌘ K</kbd></button><select id="workspaceSelect" aria-label="Current workspace"></select><button id="showTour" class="product-tool" type="button" title="Show product tour">?</button><button id="exportWorkspace" class="product-tool" type="button" title="Download workspace backup">⇩</button><button id="renameWorkspace" class="workspace-action" type="button" title="Rename current company">✎</button><button id="deleteWorkspace" class="workspace-action danger" type="button" title="Delete current company">⌫</button><button id="newWorkspace" class="secondary" type="button">+ New company</button><div class="account-control"><small id="authEmail"></small><button id="signOut" class="avatar" title="Sign out">WS</button></div></div></header>
+    <header><div><p class="eyebrow">FOUNDER WORKSPACE</p><h1 id="pageTitle">Mission Control</h1></div><div class="workspace-switcher"><a class="world-access" href="/welcome?choose=1" title="Switch between Nova HQ and Reseller Studio"><span>◌</span><b>Choose world</b></a><button id="openNotifications" class="notification-trigger" type="button" aria-haspopup="dialog" aria-label="Open founder inbox" title="Founder inbox"><span>♢</span><span class="control-label">Inbox</span><b id="notificationCount" hidden>0</b></button><button id="openCommand" class="command-trigger" type="button" aria-haspopup="dialog" aria-label="Search and jump to any Nova tool"><span>⌕</span><b>Find a tool</b><kbd>⌘ K</kbd></button><label class="workspace-picker"><span>Company</span><select id="workspaceSelect" aria-label="Current company workspace"></select></label><button id="newWorkspace" class="secondary" type="button">+ New company</button><details class="workspace-menu" id="workspaceMenu"><summary aria-label="Open workspace tools"><span>•••</span><b>Workspace tools</b></summary><div class="workspace-menu-panel"><header><small>COMPANY CONTROLS</small><strong>Workspace tools</strong></header><button id="showTour" class="menu-action" type="button"><span>?</span><div><b>Product tour</b><small>Learn how Nova HQ works</small></div></button><button id="renameWorkspace" class="menu-action" type="button"><span>✎</span><div><b>Rename company</b><small>Change this workspace name</small></div></button><button id="exportWorkspace" class="menu-action" type="button"><span>⇩</span><div><b>Download backup</b><small>Save a copy of company data</small></div></button><button id="deleteWorkspace" class="menu-action danger" type="button"><span>⌫</span><div><b>Delete company</b><small>Permanently remove this workspace</small></div></button></div></details><div class="account-control"><span class="account-copy"><small>Signed in as</small><b id="authEmail"></b></span><button id="signOut" class="sign-out-control" type="button" title="Sign out of Nova.Ai"><span>WS</span><b>Sign out</b></button></div></div></header>
+    <section class="page-guide" aria-live="polite"><div><small id="guideStep">YOU ARE HERE · COMPANY OVERVIEW</small><strong id="guidePurpose">See what needs your attention and choose the next best action.</strong></div><button id="guideAction" class="secondary" type="button">Show me what to do →</button></section>
 
     <section class="view active" id="home">
       <div class="hero-card">
@@ -61,6 +84,18 @@
           <footer><span>Founder approval stays on</span><b>3 employees ready</b></footer>
         </div>
       </div>
+      <section class="founder-focus" aria-labelledby="founderFocusTitle">
+        <div class="focus-main">
+          <div class="focus-heading"><span class="focus-signal"><i></i> NOVA RECOMMENDS</span><span id="focusStageLabel">STAGE 01 · FOUNDATION</span></div>
+          <div class="focus-copy"><div><small>YOUR HIGHEST-IMPACT MOVE</small><h2 id="founderFocusTitle">Define the company Nova is helping you build.</h2><p id="focusDescription">Give your team one customer, one painful problem, and one measurable first milestone.</p></div><button id="focusAction" class="primary" type="button" data-focus-view="builder">Build your strategy <span>→</span></button></div>
+          <div class="focus-reason"><span>WHY NOW</span><p id="focusReason">Every AI employee uses this foundation to produce focused, coordinated work.</p></div>
+        </div>
+        <aside class="focus-rail"><div class="focus-rail-head"><small>COMPANY JOURNEY</small><b id="focusProgress">0% ready</b></div><ol id="focusStages" aria-label="Company progress"></ol></aside>
+      </section>
+      <section class="daily-brief" aria-labelledby="dailyBriefTitle">
+        <header><div><span><i></i> DAILY FOUNDER BRIEF</span><h2 id="dailyBriefTitle">Good morning, founder.</h2></div><time id="dailyBriefDate"></time></header>
+        <div class="daily-brief-grid"><article class="daily-priority"><small>01 · PRIORITY</small><h3 id="dailyPriorityTitle">Build the company foundation</h3><p id="dailyPriorityText">Nova is reviewing your workspace.</p><button id="dailyPriorityAction" class="primary" type="button">Open next action <span>→</span></button></article><article><small>02 · ATTENTION</small><h3 id="dailyAttentionTitle">Nothing blocked</h3><p id="dailyAttentionText">Founder approvals and execution blockers will appear here.</p></article><article><small>03 · RHYTHM</small><h3 id="dailyRhythmTitle">No routines scheduled</h3><p id="dailyRhythmText">Create supervised routines that add work to the queue when due.</p><button class="daily-link" type="button" data-go="team">Manage routines →</button></article></div>
+      </section>
       <div class="metrics">
         <article><small>COMPANY HEALTH</small><strong id="health">—</strong><span>Run your first strategy</span></article>
         <article><small>ACTIVE AGENTS</small><strong id="agentCount">0</strong><span>Ready when you are</span></article>
@@ -165,8 +200,47 @@
       </div>
     </section>
 
+    <section class="view" id="memory">
+      <div class="section-intro memory-intro"><div><p class="eyebrow">SHARED COMPANY CONTEXT</p><h2>One memory for every AI employee.</h2><p>Save the facts, decisions, voice, and boundaries Nova should use across strategy and employee work.</p></div><span id="memoryStatus">Not configured</span></div>
+      <div class="memory-layout">
+        <form id="memoryForm" class="memory-form">
+          <div class="memory-form-head"><div><small>COMPANY FOUNDATION</small><h3>What Nova should always know</h3></div><b id="memorySavedAt">Unsaved</b></div>
+          <label>Mission and purpose<textarea id="memoryMission" maxlength="1200" placeholder="Why does this company exist, and what outcome does it create?"></textarea></label>
+          <div class="memory-pair"><label>Primary customers<textarea id="memoryCustomers" maxlength="1200" placeholder="Who buys, what situation are they in, and what do they care about?"></textarea></label><label>Brand voice<textarea id="memoryVoice" maxlength="800" placeholder="Example: clear, calm, credible, never overhyped."></textarea></label></div>
+          <label>Verified facts<textarea id="memoryFacts" maxlength="2400" placeholder="One verified fact per line. Include real capabilities, prices, results, dates, or evidence only."></textarea><small>Nova treats these as facts. Keep assumptions out of this field.</small></label>
+          <div class="memory-pair"><label>Operating constraints<textarea id="memoryConstraints" maxlength="1600" placeholder="Budget, timeline, legal, safety, product, or channel boundaries."></textarea></label><label>Founder decisions<textarea id="memoryDecisions" maxlength="2000" placeholder="One durable decision per line, such as approved positioning or what not to build."></textarea></label></div>
+          <label>Terms Nova should avoid<input id="memoryAvoid" maxlength="500" placeholder="Example: revolutionary, guaranteed, fully autonomous"></label>
+          <div class="memory-actions"><span id="memoryFormHint">Changes stay private to this company workspace.</span><button class="primary" type="submit">Save company memory <span>→</span></button></div>
+        </form>
+        <aside class="memory-sidebar">
+          <article class="memory-score"><div><small>MEMORY READINESS</small><strong id="memoryScore">0%</strong></div><progress id="memoryProgress" max="100" value="0"></progress><p id="memoryRecommendation">Add your mission and primary customer first.</p></article>
+          <article class="memory-use"><small>USED BY NOVA</small><h3>Shared across the company</h3><ul><li><span>✦</span><div><b>Founder Agent</b><small>Strategy and revisions</small></div></li><li><span>⌕</span><div><b>Research Agent</b><small>Assumptions and evidence</small></div></li><li><span>◉</span><div><b>AI Team</b><small>Assignments and handoffs</small></div></li><li><span>✓</span><div><b>Reviewer Agent</b><small>Claims and constraints</small></div></li></ul></article>
+          <article class="memory-safety"><span>✓</span><div><b>Founder-controlled context</b><p>Memory guides AI output but never authorizes publishing, outreach, spending, or external action.</p></div></article>
+        </aside>
+      </div>
+    </section>
+
+    <section class="view" id="goals">
+      <div class="section-intro goals-intro"><div><p class="eyebrow">MEASURABLE COMPANY PROGRESS</p><h2>Turn ambition into a scoreboard.</h2><p>Set one primary outcome, track the few numbers that matter, and review performance every week.</p></div><span id="goalStatus">No active goal</span></div>
+      <section class="goal-hero"><div><small>PRIMARY COMPANY OUTCOME</small><h3 id="primaryGoalTitle">Set the result this company is working toward.</h3><p id="primaryGoalDescription">A measurable outcome gives every AI employee the same definition of progress.</p><div id="primaryGoalMeta" class="goal-meta"></div></div><button id="openGoalForm" class="primary" type="button">Set company goal <span>→</span></button></section>
+      <form id="goalForm" class="goal-form panel" hidden><div class="panel-head"><div><small>COMPANY OUTCOME</small><h3>Define measurable success</h3></div><button id="closeGoalForm" class="secondary" type="button">Cancel</button></div><div class="goal-form-grid"><label>Outcome title<input id="goalTitle" required maxlength="120" placeholder="Reach 25 paying design partners"></label><label>Target date<input id="goalTargetDate" required type="date"></label><label class="goal-description">Why this matters<textarea id="goalDescription" required maxlength="800" placeholder="Explain the business result and why it is the current priority."></textarea></label></div><button class="primary" type="submit">Save company outcome →</button></form>
+      <div class="goals-grid">
+        <section class="panel kpi-panel"><div class="panel-head"><div><small>KEY PERFORMANCE INDICATORS</small><h3>The numbers that define progress</h3></div><span id="kpiCount">0 metrics</span></div><form id="kpiForm" class="kpi-form"><label>Metric<input id="kpiName" required maxlength="80" placeholder="Paying customers"></label><label>Data source<select id="kpiSource"><option value="manual">Manual update</option><option value="page_views">Launch-page views</option><option value="signups">Launch-page signups</option><option value="conversion">Launch conversion rate</option><option value="leads">Captured leads</option><option value="qualified_leads">Qualified leads</option><option value="completed_tasks">Completed execution tasks</option><option value="validation_interviews">Customer interviews</option></select></label><label>Current<input id="kpiCurrent" required type="number" step="any" value="0"></label><label>Target<input id="kpiTarget" required type="number" step="any" value="10"></label><label>Unit<input id="kpiUnit" maxlength="20" placeholder="customers"></label><button class="primary" type="submit">Add KPI</button></form><div id="kpiList" class="kpi-empty"><b>No KPIs yet</b><span>Add two or three numbers that prove the company is moving.</span></div></section>
+        <aside class="panel weekly-review"><div class="panel-head"><div><small>WEEKLY PERFORMANCE REVIEW</small><h3 id="reviewVerdict">Waiting for a scoreboard</h3></div><span id="reviewScore">—</span></div><p id="reviewSummary">Add a company goal and at least one KPI to create a grounded weekly review.</p><div id="reviewSignals" class="review-signals"></div><div class="review-next"><small>NEXT FOUNDER DECISION</small><strong id="reviewNext">Define measurable success.</strong></div><button id="copyWeeklyReview" class="secondary" type="button">Copy weekly review</button></aside>
+      </div>
+    </section>
+
+    <section class="view" id="revenue">
+      <div class="section-intro revenue-intro"><div><p class="eyebrow">COMPANY REVENUE</p><h2>Turn the company into something customers can buy.</h2><p>Create real offers and prepare checkout without mixing company sales with Nova.Ai subscription billing.</p></div><span id="revenueStatus">Setup required</span></div>
+      <section class="revenue-readiness"><div><small>PAYMENT READINESS</small><h3 id="revenueReadinessTitle">Build the commercial foundation first.</h3><p id="revenueReadinessText">Create an offer, confirm the company’s payment relationship, then connect its own Stripe account.</p></div><strong id="revenueReadinessScore">0%</strong><ol id="revenueChecklist"></ol></section>
+      <div class="revenue-metrics"><article><small>GROSS SALES</small><strong id="grossSales">$0</strong><span>Verified paid orders only</span></article><article><small>PAID ORDERS</small><strong id="paidOrders">0</strong><span>Confirmed by webhook</span></article><article><small>ACTIVE OFFERS</small><strong id="activeOffers">0</strong><span>Ready for checkout</span></article><article><small>PAYMENTS</small><strong id="paymentState">Not connected</strong><span>Company-level Stripe account</span></article></div>
+      <div class="revenue-layout"><section class="panel offer-panel"><div class="panel-head"><div><small>OFFER CATALOG</small><h3>Products and services</h3></div><button id="openOfferForm" class="primary" type="button">+ Create offer</button></div><form id="offerForm" class="offer-form" hidden><div class="offer-form-grid"><label>Offer name<input id="offerName" required maxlength="100" placeholder="Design partner program"></label><label>Type<select id="offerType"><option value="service">Service</option><option value="product">Product</option><option value="membership">Membership</option><option value="digital">Digital product</option></select></label><label>Price<input id="offerPrice" required type="number" min="0.5" step="0.01" value="99"></label><label>Currency<select id="offerCurrency"><option value="USD">USD</option><option value="CAD">CAD</option><option value="GBP">GBP</option><option value="EUR">EUR</option></select></label><label>Billing<select id="offerBilling"><option value="one_time">One-time</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label><label class="offer-description">Customer promise<textarea id="offerDescription" required maxlength="1000" placeholder="What does the customer receive, and what outcome should they expect?"></textarea></label></div><div class="offer-form-actions"><button id="cancelOffer" class="secondary" type="button">Cancel</button><button class="primary" type="submit">Save offer →</button></div></form><div id="offerList" class="offer-empty"><b>No offers yet</b><span>Create the first product or service this company will sell.</span></div></section><aside class="panel order-panel"><div class="panel-head"><div><small>ORDER LEDGER</small><h3>Verified customer payments</h3></div><span id="orderCount">0 orders</span></div><p class="order-safety">Orders appear only after a signature-verified Stripe webhook confirms payment.</p><div id="orderList" class="order-empty"><b>No paid orders yet</b><span>Connect company payments and publish an active offer to begin selling.</span></div></aside></div>
+      <section class="payment-boundary"><span>!</span><div><strong>Nova subscription billing and company revenue stay separate</strong><p>Nova.Ai charges founders for platform access. Each company should accept its own customer payments under the confirmed payment-account configuration.</p></div><button id="configurePayments" class="secondary" type="button">Review payment setup →</button></section>
+    </section>
+
     <section class="view" id="team">
       <div class="section-intro"><div><p class="eyebrow">AI WORKFORCE</p><h2>Your company’s operating team.</h2><p>Assign one business outcome. Nova’s specialist employees divide the work, coordinate their deliverables, and bring important actions back for approval.</p></div><span>Founder supervised</span></div>
+      <section class="routine-panel panel"><div class="panel-head"><div><small>SUPERVISED OPERATING RHYTHM</small><h3>Recurring AI routines</h3></div><span id="routineCount">0 active</span></div><p class="routine-note">When a routine is due, Nova adds it to the work queue. It never runs AI, spends tokens, or takes external action until you choose Run now.</p><form id="routineForm" class="routine-form"><label>Routine name<input id="routineName" required maxlength="80" placeholder="Weekly growth review"></label><label class="routine-goal">Assignment<textarea id="routineGoal" required maxlength="1200" placeholder="Review our latest signals and prepare the three highest-impact growth experiments for founder approval."></textarea></label><label>Lead department<select id="routineDepartment"><option value="company">Whole company</option><option value="strategy">Strategy</option><option value="research">Research</option><option value="product">Product</option><option value="marketing">Marketing & sales</option><option value="operations">Operations</option></select></label><label>Cadence<select id="routineCadence"><option value="daily">Every day</option><option value="weekly" selected>Every week</option><option value="monthly">Every month</option></select></label><button class="primary" type="submit">Add supervised routine →</button></form><div id="routineList" class="routine-empty"><b>No routines yet</b><span>Schedule repeatable work without allowing automatic execution.</span></div></section>
       <section class="work-queue panel"><div class="panel-head"><div><small>UP NEXT</small><h3>Employee work queue</h3></div><span id="workQueueCount">0 queued</span></div><div id="workQueue" class="queue-empty"><b>No work queued</b><span>Save an assignment for later or run it immediately.</span></div></section>
       <section class="execution-board panel"><div class="panel-head"><div><small>APPROVED EXECUTION</small><h3>Supervised task board</h3></div><span id="executionCount">0 tasks</span></div><p class="execution-disclaimer">Statuses reflect your team’s updates. Nova.Ai never claims an external action happened without confirmation.</p><div id="executionBoard" class="execution-empty"><b>No approved tasks yet</b><span>Approve an employee assignment to create an execution checklist.</span></div></section>
       <section class="workforce-console">
@@ -193,6 +267,27 @@
       <div id="approvalContent" class="approval-card"><div class="approval-icon">⌁</div><h3>No launch plan yet</h3><p>Generate a strategy and its reviewed output will appear here.</p><button class="primary" data-go="builder">Create strategy</button></div>
     </section>
 
+    <section class="view" id="autopilot">
+      <div class="section-intro autopilot-intro"><div><p class="eyebrow">VERIFIED EXECUTION ENGINE</p><h2>Work that proves it happened.</h2><p>Nova turns approved objectives into accountable execution, requires evidence, independently checks the result, and keeps risky actions behind founder approval.</p></div><span id="autopilotState">Founder supervised</span></div>
+      <section class="durable-command panel"><div class="durable-command-copy"><small>DURABLE AGENT MISSIONS</small><h3>Assign work that survives reloads and failures.</h3><p>Strategy, Research, and Builder complete retryable preparation steps. The mission then pauses until you approve or reject its external execution boundary.</p><div class="durable-trust"><span>↻ Automatic retries</span><span>Ⅱ Approval pause</span><span>✓ Persistent run history</span></div></div><form id="durableMissionForm"><label>MISSION OUTCOME<textarea id="durableMissionObjective" required maxlength="1200" placeholder="Example: Prepare and validate the launch required to recruit our first five paying design partners."></textarea></label><button class="primary" type="submit">Start durable mission →</button></form></section>
+      <section class="durable-runs panel"><div class="panel-head"><div><small>WORKFLOW RUNTIME</small><h3>Durable mission runs</h3></div><span id="durableRuntimeStatus">Checking runtime…</span></div><div id="durableMissionList" class="engine-empty"><b>No durable missions yet</b><span>Start a mission to create a crash-safe, retryable run with a founder approval checkpoint.</span></div></section>
+      <section class="autopilot-scoreboard">
+        <article><small>ACTIVE MISSIONS</small><strong id="missionCount">0</strong><span>approved outcomes in motion</span></article>
+        <article><small>AWAITING EVIDENCE</small><strong id="evidenceCount">0</strong><span>claims that still need proof</span></article>
+        <article><small>VERIFIED RESULTS</small><strong id="verifiedCount">0</strong><span>reviewed company outcomes</span></article>
+        <article><small>CONTROL GATES</small><strong id="gateCount">0</strong><span>actions held for a founder</span></article>
+      </section>
+      <section class="execution-loop panel">
+        <div class="panel-head"><div><small>THE NOVA LOOP</small><h3>One operating system from goal to outcome</h3></div><span>Evidence required</span></div>
+        <ol class="loop-rail"><li><b>1</b><span><strong>Goal</strong><small>Measurable objective</small></span></li><li><b>2</b><span><strong>Plan</strong><small>Specialist assignments</small></span></li><li><b>3</b><span><strong>Approval</strong><small>Risk control gate</small></span></li><li><b>4</b><span><strong>Execute</strong><small>Connected-tool work</small></span></li><li><b>5</b><span><strong>Evidence</strong><small>Result and source</small></span></li><li><b>6</b><span><strong>Verify</strong><small>Independent review</small></span></li><li><b>7</b><span><strong>Learn</strong><small>Memory and KPIs</small></span></li></ol>
+      </section>
+      <section class="autopilot-grid">
+        <article class="panel mission-control"><div class="panel-head"><div><small>MISSION CONTROL</small><h3>Approved work in execution</h3></div><span id="missionProgress">0% verified</span></div><div id="missionList" class="engine-empty"><b>No active mission yet</b><span>Assign work to your AI Team, review it, then approve the tasks you want Nova to execute.</span><button class="primary" type="button" data-engine-go="team">Assign a mission →</button></div></article>
+        <aside class="panel control-gates"><div class="panel-head"><div><small>SAFETY LAYER</small><h3>Founder control gates</h3></div><span>Always on</span></div><div class="gate-list"><div><i>✓</i><span><b>Safe internal work</b><small>Research, analysis, drafting, and planning can proceed.</small></span></div><div><i>!</i><span><b>External communication</b><small>Email, social posts, ads, and customer messages require approval.</small></span></div><div><i>$</i><span><b>Money and commitments</b><small>Purchases, refunds, pricing changes, and contracts require approval.</small></span></div><div><i>⌘</i><span><b>Production changes</b><small>Publishing, deployment, and destructive actions require approval.</small></span></div></div></aside>
+      </section>
+      <section class="panel evidence-vault"><div class="panel-head"><div><small>EVIDENCE VAULT</small><h3>Verified company outcomes</h3></div><span id="vaultStatus">No evidence yet</span></div><div id="evidenceVault" class="engine-empty"><b>Nothing has been verified</b><span>Completed tasks appear here after their evidence passes independent review.</span></div></section>
+    </section>
+
     <section class="view" id="billing">
       <div class="section-intro"><div><p class="eyebrow">NOVA.AI PLANS</p><h2>Choose the team that fits your ambition.</h2><p>Every plan keeps you in control. Upgrade, downgrade or cancel through Stripe’s secure portal.</p></div><span id="billingState" class="billing-state">Checking billing…</span></div>
       <div class="pricing-grid">
@@ -201,6 +296,13 @@
         <article class="price-card"><p class="eyebrow">OPERATOR</p><h3>$199 <small>/ month</small></h3><p>Operate a portfolio with advanced workflows and generous capacity.</p><ul><li>Unlimited companies</li><li>Advanced agent workflows</li><li>2,000,000-token workspace ceiling</li></ul><button class="secondary plan-button" data-plan="operator">Choose Operator</button></article>
       </div>
       <article class="panel subscription-panel"><div><small>CURRENT ACCESS</small><h3 id="currentPlan">Checking access…</h3><p id="currentPlanDetail">Loading your Nova.Ai entitlement.</p><div id="entitlementBenefits" class="entitlement-benefits"></div></div><button id="manageBilling" class="secondary" hidden>Manage subscription</button></article>
+    </section>
+
+    <section class="view" id="connections">
+      <div class="section-intro"><div><p class="eyebrow">TOOL CONTROL PLANE</p><h2>Connect tools without surrendering control.</h2><p>Nova uses short-lived, scoped access. You decide what each employee can read, prepare, publish, spend, or change.</p></div><span id="connectionsSummary">Checking tools…</span></div>
+      <section class="connection-principles panel"><article><i>01</i><div><b>Least privilege</b><span>Start read-only. Enable only the capability a mission needs.</span></div></article><article><i>02</i><div><b>Founder gates</b><span>Sending, publishing, spending, refunds, and deployment remain explicit decisions.</span></div></article><article><i>03</i><div><b>Revocable access</b><span>Vercel Connect supplies scoped tokens without exposing credentials to the browser.</span></div></article></section>
+      <section id="connectionGrid" class="connection-grid"><article class="connection-loading-card">Loading connection status…</article></section>
+      <section class="connection-setup panel"><div><small>GITHUB SETUP</small><h3>Install the Nova.Ai GitHub connector</h3><p>Create an app-scoped connector from this project directory. Nova will then verify repository visibility without exposing its token.</p></div><code>vercel connect create github --name nova-ai</code><button id="copyGitHubSetup" class="secondary" type="button">Copy setup command</button></section>
     </section>
 
     <section class="view" id="settings">
@@ -265,5 +367,11 @@
   <script src="app.js"></script>
   <script src="billing-client.js"></script>
   <script src="validation.js"></script>
+  <script src="live-kpis.js"></script>
+  <script src="revenue.js"></script>
+  <script src="execution-engine.js"></script>
+  <script src="minimal-ui.js"></script>
+  <script src="durable-missions.js"></script>
+  <script src="connections.js"></script>
 </body>
 </html>

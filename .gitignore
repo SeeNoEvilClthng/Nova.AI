@@ -7,3 +7,7 @@ node_modules/
 .env.local
 .env*
 !.env.example
+/.swc
+/.output/
+/.workflow-data/
+/NOVA_AI_CHAT_TRANSCRIPT.md

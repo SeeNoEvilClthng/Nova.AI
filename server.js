@@ -7,43 +7,80 @@ const supabase = require("./supabase");
 const billing = require("./billing");
 const { assertAiBudget } = require("./ai-budget");
 const entitlements = require("./entitlements");
+const execution = require("./execution-core");
+const toolPermissions = require("./tool-permissions");
+const crypto = require("node:crypto");
 
-const root = __dirname;
+const root = path.resolve(process.env.NOVA_APP_ROOT || process.cwd());
 const port = Number(process.env.PORT || 4180);
+const receiptSecret=()=>{
+  const secret=process.env.EXECUTION_RECEIPT_SECRET||process.env.SUPABASE_SECRET_KEY;
+  if(secret)return secret;
+  if(process.env.NODE_ENV==="production")throw Object.assign(new Error("EXECUTION_RECEIPT_SECRET is required in production"),{status:503});
+  return "nova-local-development-receipt-key";
+};
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png" };
 const staticFiles = new Map([
-  ["/", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
-  ["/welcome", ["welcome.html", fs.readFileSync(path.join(__dirname, "welcome.html"))]],
-  ["/privacy", ["privacy.html", fs.readFileSync(path.join(__dirname, "privacy.html"))]],
-  ["/terms", ["terms.html", fs.readFileSync(path.join(__dirname, "terms.html"))]],
-  ["/billing-policy", ["billing-policy.html", fs.readFileSync(path.join(__dirname, "billing-policy.html"))]],
-  ["/nova-mark.png", ["nova-mark.png", fs.readFileSync(path.join(__dirname, "nova-mark.png"))]],
-  ["/og-nova.png", ["og-nova.png", fs.readFileSync(path.join(__dirname, "og-nova.png"))]],
-  ["/index.html", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
-  ["/styles.css", ["styles.css", fs.readFileSync(path.join(__dirname, "styles.css"))]],
-  ["/router.css", ["router.css", fs.readFileSync(path.join(__dirname, "router.css"))]],
-  ["/workspaces.css", ["workspaces.css", fs.readFileSync(path.join(__dirname, "workspaces.css"))]],
-  ["/auth.css", ["auth.css", fs.readFileSync(path.join(__dirname, "auth.css"))]],
-  ["/billing.css", ["billing.css", fs.readFileSync(path.join(__dirname, "billing.css"))]],
-  ["/revision.css", ["revision.css", fs.readFileSync(path.join(__dirname, "revision.css"))]],
-  ["/workspace-actions.css", ["workspace-actions.css", fs.readFileSync(path.join(__dirname, "workspace-actions.css"))]],
-  ["/onboarding.css", ["onboarding.css", fs.readFileSync(path.join(__dirname, "onboarding.css"))]],
-  ["/product-tools.css", ["product-tools.css", fs.readFileSync(path.join(__dirname, "product-tools.css"))]],
-  ["/lead-inbox.css", ["lead-inbox.css", fs.readFileSync(path.join(__dirname, "lead-inbox.css"))]],
-  ["/modern.css", ["modern.css", fs.readFileSync(path.join(__dirname, "modern.css"))]],
-  ["/workforce.css", ["workforce.css", fs.readFileSync(path.join(__dirname, "workforce.css"))]],
-  ["/ai-office.css", ["ai-office.css", fs.readFileSync(path.join(__dirname, "ai-office.css"))]],
-  ["/ai-activity.css", ["ai-activity.css", fs.readFileSync(path.join(__dirname, "ai-activity.css"))]],
-  ["/command-menu.css", ["command-menu.css", fs.readFileSync(path.join(__dirname, "command-menu.css"))]],
-  ["/notifications.css", ["notifications.css", fs.readFileSync(path.join(__dirname, "notifications.css"))]],
-  ["/settings.css", ["settings.css", fs.readFileSync(path.join(__dirname, "settings.css"))]],
-  ["/public-site.css", ["public-site.css", fs.readFileSync(path.join(__dirname, "public-site.css"))]],
-  ["/launch-studio.css", ["launch-studio.css", fs.readFileSync(path.join(__dirname, "launch-studio.css"))]],
-  ["/validation.css", ["validation.css", fs.readFileSync(path.join(__dirname, "validation.css"))]],
-  ["/auth.js", ["auth.js", fs.readFileSync(path.join(__dirname, "auth.js"))]],
-  ["/app.js", ["app.js", fs.readFileSync(path.join(__dirname, "app.js"))]],
-  ["/billing-client.js", ["billing-client.js", fs.readFileSync(path.join(__dirname, "billing-client.js"))]],
-  ["/validation.js", ["validation.js", fs.readFileSync(path.join(__dirname, "validation.js"))]]
+  ["/", ["index.html", fs.readFileSync(path.join(root, "index.html"))]],
+  ["/welcome", ["welcome.html", fs.readFileSync(path.join(root, "welcome.html"))]],
+  ["/reseller", ["reseller.html", fs.readFileSync(path.join(root, "reseller.html"))]],
+  ["/reseller-studio", ["reseller-app.html", fs.readFileSync(path.join(root, "reseller-app.html"))]],
+  ["/privacy", ["privacy.html", fs.readFileSync(path.join(root, "privacy.html"))]],
+  ["/terms", ["terms.html", fs.readFileSync(path.join(root, "terms.html"))]],
+  ["/billing-policy", ["billing-policy.html", fs.readFileSync(path.join(root, "billing-policy.html"))]],
+  ["/nova-mark.png", ["nova-mark.png", fs.readFileSync(path.join(root, "nova-mark.png"))]],
+  ["/og-nova.png", ["og-nova.png", fs.readFileSync(path.join(root, "og-nova.png"))]],
+  ["/index.html", ["index.html", fs.readFileSync(path.join(root, "index.html"))]],
+  ["/styles.css", ["styles.css", fs.readFileSync(path.join(root, "styles.css"))]],
+  ["/router.css", ["router.css", fs.readFileSync(path.join(root, "router.css"))]],
+  ["/workspaces.css", ["workspaces.css", fs.readFileSync(path.join(root, "workspaces.css"))]],
+  ["/auth.css", ["auth.css", fs.readFileSync(path.join(root, "auth.css"))]],
+  ["/billing.css", ["billing.css", fs.readFileSync(path.join(root, "billing.css"))]],
+  ["/revision.css", ["revision.css", fs.readFileSync(path.join(root, "revision.css"))]],
+  ["/workspace-actions.css", ["workspace-actions.css", fs.readFileSync(path.join(root, "workspace-actions.css"))]],
+  ["/onboarding.css", ["onboarding.css", fs.readFileSync(path.join(root, "onboarding.css"))]],
+  ["/product-tools.css", ["product-tools.css", fs.readFileSync(path.join(root, "product-tools.css"))]],
+  ["/lead-inbox.css", ["lead-inbox.css", fs.readFileSync(path.join(root, "lead-inbox.css"))]],
+  ["/modern.css", ["modern.css", fs.readFileSync(path.join(root, "modern.css"))]],
+  ["/workforce.css", ["workforce.css", fs.readFileSync(path.join(root, "workforce.css"))]],
+  ["/ai-office.css", ["ai-office.css", fs.readFileSync(path.join(root, "ai-office.css"))]],
+  ["/ai-activity.css", ["ai-activity.css", fs.readFileSync(path.join(root, "ai-activity.css"))]],
+  ["/command-menu.css", ["command-menu.css", fs.readFileSync(path.join(root, "command-menu.css"))]],
+  ["/notifications.css", ["notifications.css", fs.readFileSync(path.join(root, "notifications.css"))]],
+  ["/settings.css", ["settings.css", fs.readFileSync(path.join(root, "settings.css"))]],
+  ["/founder-focus.css", ["founder-focus.css", fs.readFileSync(path.join(root, "founder-focus.css"))]],
+  ["/founder-focus-theme.css", ["founder-focus-theme.css", fs.readFileSync(path.join(root, "founder-focus-theme.css"))]],
+  ["/company-memory.css", ["company-memory.css", fs.readFileSync(path.join(root, "company-memory.css"))]],
+  ["/company-memory-theme.css", ["company-memory-theme.css", fs.readFileSync(path.join(root, "company-memory-theme.css"))]],
+  ["/operating-rhythm.css", ["operating-rhythm.css", fs.readFileSync(path.join(root, "operating-rhythm.css"))]],
+  ["/goals-metrics.css", ["goals-metrics.css", fs.readFileSync(path.join(root, "goals-metrics.css"))]],
+  ["/goals-metrics-live.css", ["goals-metrics-live.css", fs.readFileSync(path.join(root, "goals-metrics-live.css"))]],
+  ["/revenue.css", ["revenue.css", fs.readFileSync(path.join(root, "revenue.css"))]],
+  ["/execution-engine.css", ["execution-engine.css", fs.readFileSync(path.join(root, "execution-engine.css"))]],
+  ["/minimal-ui.css", ["minimal-ui.css", fs.readFileSync(path.join(root, "minimal-ui.css"))]],
+  ["/durable-missions.css", ["durable-missions.css", fs.readFileSync(path.join(root, "durable-missions.css"))]],
+  ["/connections.css", ["connections.css", fs.readFileSync(path.join(root, "connections.css"))]],
+  ["/public-site.css", ["public-site.css", fs.readFileSync(path.join(root, "public-site.css"))]],
+  ["/world-gateway.css", ["world-gateway.css", fs.readFileSync(path.join(root, "world-gateway.css"))]],
+  ["/world-gateway.js", ["world-gateway.js", fs.readFileSync(path.join(root, "world-gateway.js"))]],
+  ["/reseller-app.css", ["reseller-app.css", fs.readFileSync(path.join(root, "reseller-app.css"))]],
+  ["/reseller-ai.css", ["reseller-ai.css", fs.readFileSync(path.join(root, "reseller-ai.css"))]],
+  ["/reseller-content.css", ["reseller-content.css", fs.readFileSync(path.join(root, "reseller-content.css"))]],
+  ["/reseller-content-mobile.css", ["reseller-content-mobile.css", fs.readFileSync(path.join(root, "reseller-content-mobile.css"))]],
+  ["/reseller-interactions.css", ["reseller-interactions.css", fs.readFileSync(path.join(root, "reseller-interactions.css"))]],
+  ["/reseller-app.js", ["reseller-app.js", fs.readFileSync(path.join(root, "reseller-app.js"))]],
+  ["/launch-studio.css", ["launch-studio.css", fs.readFileSync(path.join(root, "launch-studio.css"))]],
+  ["/validation.css", ["validation.css", fs.readFileSync(path.join(root, "validation.css"))]],
+  ["/auth.js", ["auth.js", fs.readFileSync(path.join(root, "auth.js"))]],
+  ["/app.js", ["app.js", fs.readFileSync(path.join(root, "app.js"))]],
+  ["/billing-client.js", ["billing-client.js", fs.readFileSync(path.join(root, "billing-client.js"))]],
+  ["/validation.js", ["validation.js", fs.readFileSync(path.join(root, "validation.js"))]],
+  ["/live-kpis.js", ["live-kpis.js", fs.readFileSync(path.join(root, "live-kpis.js"))]],
+  ["/revenue.js", ["revenue.js", fs.readFileSync(path.join(root, "revenue.js"))]],
+  ["/execution-engine.js", ["execution-engine.js", fs.readFileSync(path.join(root, "execution-engine.js"))]],
+  ["/minimal-ui.js", ["minimal-ui.js", fs.readFileSync(path.join(root, "minimal-ui.js"))]],
+  ["/durable-missions.js", ["durable-missions.js", fs.readFileSync(path.join(root, "durable-missions.js"))]],
+  ["/connections.js", ["connections.js", fs.readFileSync(path.join(root, "connections.js"))]]
 ]);
 const rateBuckets = new Map();
 
@@ -277,6 +314,25 @@ app.use(async (req, res) => {
     } catch (error) { return sendJson(res, error.status || 400, { error: error.message }); }
   }
   if (pathname === "/api/config" && req.method === "GET") return sendJson(res, 200, { supabase: supabase.publicConfig(), storage: supabase.configured() ? "supabase" : "sqlite" });
+  if (pathname === "/api/execution/verify" && req.method === "POST") {
+    try {
+      if(rateLimited(req,"execution-verify",60))return sendJson(res,429,{error:"Too many verification attempts"});
+      const input=await readBody(req),workspaceId=String(input.workspaceId||"").trim();
+      if(!workspaceId)return sendJson(res,400,{error:"Workspace is required"});
+      const workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
+      const task=(workspace.state?.executionTasks||[]).find(item=>item.id===String(input.taskId||""));
+      if(!task)return sendJson(res,404,{error:"Approved execution task not found"});
+      if(task.status!=="done")return sendJson(res,409,{error:"Confirm the task result before submitting evidence"});
+      const verification=execution.verifyEvidence(input),createdAt=new Date().toISOString(),proof={id:crypto.randomUUID(),...verification,risk:execution.classifyRisk(task),createdAt};
+      proof.receipt=execution.signReceipt(workspaceId,proof,receiptSecret());
+      const state={...(workspace.state||{}),executionProofs:[proof,...(workspace.state?.executionProofs||[]).filter(item=>item.taskId!==task.id)].slice(0,200)};
+      state.activities=[...(state.activities||[]),{title:proof.status==="verified"?"Execution outcome independently verified":"Execution evidence needs revision",detail:`${String(task.title||"").slice(0,70)} · reviewer score ${proof.score}/100`,receipt:proof.receipt.slice(0,12)}];
+      const saved=supabase.configured()?await supabase.saveWorkspace(req,workspaceId,state):database.saveWorkspace(workspaceId,state);
+      if(!saved)return sendJson(res,500,{error:"Verification could not be saved"});
+      return sendJson(res,200,{proof,executionProofs:state.executionProofs,activities:state.activities});
+    } catch(error){return sendJson(res,error.status||500,{error:error.message});}
+  }
   if (pathname === "/api/validation" && req.method === "GET") {
     try {
       if (!supabase.configured()) return sendJson(res, 200, { entries: [] });
@@ -338,10 +394,26 @@ app.use(async (req, res) => {
     } catch (error) { return sendJson(res, error.status || 500, { error: error.message }); }
   }
   if (pathname === "/api/providers" && req.method === "GET") return sendJson(res, 200, router.providerStatus());
+  if (pathname === "/api/reseller/listings" && req.method === "POST") {
+    try {
+      if(rateLimited(req,"reseller-listings",20))return sendJson(res,429,{error:"The Listing Agent reached its hourly preparation limit"});
+      const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),products=Array.isArray(input.products)?input.products.slice(0,5):[];
+      if(!workspaceId||!products.length)return sendJson(res,400,{error:"Choose at least one product to prepare"});
+      if(products.some(product=>!String(product.name||"").trim()||!String(product.category||"").trim()||String(product.description||"").trim().length<10))return sendJson(res,400,{error:"Every product needs a name, category, and verified details"});
+      const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);const results=[];
+      for(const product of products)results.push(await router.generateResellerListing({product:{name:String(product.name).slice(0,100),sku:String(product.sku||"").slice(0,40),category:String(product.category).slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description).slice(0,1200)},userId:user?.id,workspaceId}));
+      return sendJson(res,200,{listings:results});
+    }catch(error){return sendJson(res,error.status||502,{error:error.message})}
+  }
   if (pathname === "/api/state" && req.method === "PUT") {
     try {
       const value = await readBody(req);
-      const raw = supabase.configured() ? await supabase.saveWorkspace(req, requestUrl.searchParams.get("workspace"), value) : database.saveWorkspace(requestUrl.searchParams.get("workspace"), value);
+      const workspaceId=requestUrl.searchParams.get("workspace"),existing=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      if(!existing)return sendJson(res,404,{error:"Workspace not found"});
+      value.executionProofs=(existing.state?.executionProofs||[]).filter(proof=>execution.validReceipt(workspaceId,proof,receiptSecret()));
+      value.durableMissions=existing.state?.durableMissions||[];
+      value.toolPermissions=toolPermissions.normalizePermissions(existing.state?.toolPermissions);
+      const raw = supabase.configured() ? await supabase.saveWorkspace(req, workspaceId, value) : database.saveWorkspace(workspaceId, value);
       const workspace = raw && supabase.configured() ? { id: raw.id, name: raw.name, state: raw.state, createdAt: raw.created_at, updatedAt: raw.updated_at } : raw;
       return workspace ? sendJson(res, 200, workspace) : sendJson(res, 404, { error: "Workspace not found" });
     }

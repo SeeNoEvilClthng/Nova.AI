@@ -3,15 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@vercel/connect": "^0.8.0",
     "ai": "^7.0.47",
-    "express": "5.1.0"
+    "express": "5.1.0",
+    "nitro": "^3.0.260610-beta",
+    "rollup": "^4.62.4",
+    "workflow": "^5.0.0-beta.42"
   },
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js",
-    "check": "node --check server.js && node --check database.js && node --check supabase.js && node --check billing.js && node --check router.js && node --check auth.js && node --check app.js && node --check billing-client.js",
+    "dev": "npm run build && PORT=4180 node --env-file-if-exists=.env .output/server/index.mjs",
+    "build": "nitro build",
+    "start": "npm run build && PORT=4180 node --env-file-if-exists=.env .output/server/index.mjs",
+    "check": "node --check server.js && node --check database.js && node --check supabase.js && node --check billing.js && node --check router.js && node --check execution-core.js && node --check tool-permissions.js && node --check auth.js && node --check app.js && node --check billing-client.js && node --check validation.js && node --check live-kpis.js && node --check revenue.js && node --check execution-engine.js && node --check minimal-ui.js && node --check durable-missions.js && node --check connections.js && node --check reseller-app.js",
     "test": "node --test *.test.js"
   },
   "engines": {
     "node": "24.x"
+  },
+  "overrides": {
+    "nanoid": "5.1.16"
   }
 }

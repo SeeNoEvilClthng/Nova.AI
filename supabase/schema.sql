@@ -149,3 +149,21 @@ grant insert on public.nova_page_events to anon; grant select on public.nova_pag
 grant usage,select on sequence public.nova_page_events_id_seq to anon;
 create policy "Visitors can record published Nova page events" on public.nova_page_events for insert to anon with check (exists(select 1 from public.nova_published_pages p where p.id=page_id and p.published));
 create policy "Owners can read Nova page events" on public.nova_page_events for select to authenticated using (exists(select 1 from public.nova_published_pages p where p.id=page_id and p.user_id=(select auth.uid())));
+
+-- Meta fetches approved graphics from this public bucket. Write and management
+-- access remains limited to the signed-in owner's folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('nova-social-media', 'nova-social-media', true, 5242880, array['image/png','image/jpeg','image/webp'])
+on conflict (id) do update set public=excluded.public, file_size_limit=excluded.file_size_limit, allowed_mime_types=excluded.allowed_mime_types;
+
+drop policy if exists "Nova users can upload their own social media" on storage.objects;
+create policy "Nova users can upload their own social media" on storage.objects for insert to authenticated
+with check (bucket_id='nova-social-media' and (storage.foldername(name))[1]=(select auth.uid()::text));
+
+drop policy if exists "Nova users can list their own social media" on storage.objects;
+create policy "Nova users can list their own social media" on storage.objects for select to authenticated
+using (bucket_id='nova-social-media' and owner_id=(select auth.uid()::text));
+
+drop policy if exists "Nova users can delete their own social media" on storage.objects;
+create policy "Nova users can delete their own social media" on storage.objects for delete to authenticated
+using (bucket_id='nova-social-media' and owner_id=(select auth.uid()::text));su

@@ -1,8 +1,9 @@
 const { DatabaseSync } = require("node:sqlite");
 const { randomUUID } = require("node:crypto");
 const path = require("node:path");
+const root = path.resolve(process.env.NOVA_APP_ROOT || process.cwd());
 
-const db = new DatabaseSync(path.join(__dirname, "data", "nova.db"));
+const db = new DatabaseSync(path.join(root, "data", "nova.db"));
 db.exec(`
   PRAGMA journal_mode = WAL;
   CREATE TABLE IF NOT EXISTS workspaces (

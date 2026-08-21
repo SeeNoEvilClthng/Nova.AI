@@ -13,6 +13,7 @@
   function render(){
     const demand=avg("demand_score"),urgency=avg("urgency_score"),willingness=avg("willingness_score"),signal=(demand+urgency+willingness)/3;
     const confidence=Math.min(1,entries.length/10),score=Math.round((signal/5)*confidence*100);
+    window.novaValidationStats={count:entries.length,demand,urgency,willingness,score};window.dispatchEvent(new CustomEvent("nova-validation-stats"));
     $("validationCount").textContent=`${entries.length} interview${entries.length===1?"":"s"}`;$("evidenceScore").textContent=score+"%";$("demandAverage").textContent=fmt(demand);$("urgencyAverage").textContent=fmt(urgency);$("willingnessAverage").textContent=fmt(willingness);
     let title="Collect five interviews",text="Evidence beats enthusiasm. Start by speaking with target customers.",icon="○",label="Not enough evidence";
     if(entries.length>=5&&signal>=4){title="Continue and test conversion";text="Customer signals are strong. Put the approved landing page in front of more prospects and measure signups.";icon="↗";label="Promising signal";}

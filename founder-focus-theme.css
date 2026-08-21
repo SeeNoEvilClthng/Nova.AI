@@ -1,0 +1,16 @@
+.founder-focus {
+  border-color: rgba(255, 255, 255, .1);
+  background: linear-gradient(145deg, #11131a, #0c0e14);
+  color: #f3f1fb;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .18);
+}
+.focus-heading { border-color: rgba(255, 255, 255, .08); color: #777384; }
+.focus-copy h2 { color: #f4f2fb; }
+.focus-copy p, .focus-reason p { color: #8a91a0; }
+.focus-reason { border-color: rgba(151, 133, 255, .14); background: rgba(117, 95, 238, .055); }
+.focus-rail { border-color: rgba(255, 255, 255, .08); background: linear-gradient(145deg, rgba(128, 103, 255, .08), rgba(255, 255, 255, .018)); }
+.focus-stage { color: #5f6572; }
+.focus-stage::before { border-color: #3b3d48; background: #15171e; }
+.focus-stage::after { background: #2e3039; }
+.focus-stage.complete { color: #9298a6; }
+.focus-stage.current { color: #c9c2ff; }

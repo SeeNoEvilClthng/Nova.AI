@@ -92,3 +92,28 @@ test("configures a current free model fallback without duplicating the primary",
     if (original.fallbacks === undefined) delete process.env.AI_GATEWAY_FALLBACK_MODELS; else process.env.AI_GATEWAY_FALLBACK_MODELS = original.fallbacks;
   }
 });
+
+test("creates a safe reseller listing fallback from verified facts only", () => {
+  const kit=router.fallbackResellerListing({name:"Leather shoulder bag",category:"Accessories",condition:"Good",channel:"Nova showroom",price:85,quantity:1,description:"Brown leather bag with adjustable strap and visible wear on the corners."});
+  assert.equal(kit.title,"Good Leather shoulder bag");
+  assert.match(kit.description,/visible wear on the corners/);
+  assert.match(kit.pricingGuidance,/seller-set price/);
+  assert.ok(kit.reviewWarnings.some(item=>item.includes("Confirm")));
+  assert.ok(!kit.description.toLowerCase().includes("authentic"));
+});
+
+test("returns a reviewable reseller listing kit when model credentials are unavailable", async () => {
+  const original={openai:process.env.OPENAI_API_KEY,gateway:process.env.AI_GATEWAY_API_KEY,oidc:process.env.VERCEL_OIDC_TOKEN};
+  delete process.env.OPENAI_API_KEY;delete process.env.AI_GATEWAY_API_KEY;delete process.env.VERCEL_OIDC_TOKEN;
+  try{
+    const result=await router.generateResellerListing({product:{name:"Desk lamp",category:"Lighting",condition:"Like new",channel:"Etsy",price:42,quantity:1,description:"Black metal lamp tested with a working dimmer switch."}});
+    assert.equal(result.contribution.role,"Reseller Listing Agent");
+    assert.equal(result.contribution.model,"Demo engine");
+    assert.equal(result.kit.tags.length,4);
+    assert.match(result.kit.socialCaption,/Desk lamp/);
+  }finally{
+    if(original.openai===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=original.openai;
+    if(original.gateway===undefined)delete process.env.AI_GATEWAY_API_KEY;else process.env.AI_GATEWAY_API_KEY=original.gateway;
+    if(original.oidc===undefined)delete process.env.VERCEL_OIDC_TOKEN;else process.env.VERCEL_OIDC_TOKEN=original.oidc;
+  }
+});

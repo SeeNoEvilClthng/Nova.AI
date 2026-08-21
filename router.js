@@ -154,4 +154,17 @@ async function generateWorkforce(input, fallback, schema, reviewOptions = {}) {
   return { ...output.plan, review:reviewOutput?.plan || null, contribution:output.contribution, contributions, warnings };
 }
 
-module.exports = { providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce };
+function fallbackResellerListing(product) {
+  const name=String(product.name||"Product").trim(),condition=String(product.condition||"Pre-owned").trim(),description=String(product.description||"").trim(),channel=String(product.channel||"Nova showroom").trim();
+  return {title:`${condition} ${name}`.slice(0,140),description:`${description} Condition: ${condition}. ${Number(product.quantity)>1?`${Math.floor(Number(product.quantity))} available.`:"One available."}`.slice(0,1800),tags:[product.category,condition,channel,name].map(value=>String(value||"").trim().toLowerCase()).filter(Boolean).slice(0,8),socialCaption:`Now available: ${name} — ${condition.toLowerCase()} condition. Review the full verified details before purchasing.`.slice(0,500),pricingGuidance:`Listed at $${Number(product.price||0).toFixed(2)}. Compare this seller-set price with recent completed sales before changing it.`,reviewWarnings:["Confirm measurements, visible wear, included items, and shipping terms before approval."]};
+}
+
+async function generateResellerListing(input) {
+  const schema={type:"object",additionalProperties:false,required:["title","description","tags","socialCaption","pricingGuidance","reviewWarnings"],properties:{title:{type:"string",maxLength:140},description:{type:"string",maxLength:1800},tags:{type:"array",items:{type:"string"},maxItems:8},socialCaption:{type:"string",maxLength:500},pricingGuidance:{type:"string",maxLength:500},reviewWarnings:{type:"array",items:{type:"string"},maxItems:4}}};
+  const warnings=[];let output=null;
+  try{output=await runOpenAI(input,schema,{role:"Reseller Listing Agent",schemaName:"reseller_listing_kit",instructions:"You are Nova.Ai's Reseller Listing Agent. Create accurate, channel-aware selling copy using only the seller-verified product facts supplied. Never invent brand, authenticity, measurements, materials, provenance, demand, market prices, product performance, shipping terms, or condition details. The pricing guidance must clearly remain advice, not a valuation or promise. Put any missing facts the seller should confirm into reviewWarnings. Do not claim that anything was published or sold. Return one JSON object matching the schema."});}catch(error){warnings.push(error.message)}
+  if(!output)output={plan:fallbackResellerListing(input.product||input),contribution:{id:randomUUID(),provider:"Nova",role:"Reseller Listing Agent",model:"Demo engine",usage:{inputTokens:0,outputTokens:0,totalTokens:0},createdAt:new Date().toISOString()}};
+  return{kit:output.plan,contribution:output.contribution,warnings};
+}
+
+module.exports = { providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce, generateResellerListing, fallbackResellerListing };

@@ -1,0 +1,29 @@
+.memory-form,
+.memory-sidebar > article {
+  border-color: rgba(255, 255, 255, .1);
+  background: linear-gradient(145deg, #11131a, #0c0e14);
+  color: #f3f1fb;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .16);
+}
+.memory-form-head h3,
+.memory-use h3,
+.memory-form label,
+.memory-use li b { color: #f1eff8; }
+.memory-form-head > b,
+.memory-actions > span,
+.memory-use li small,
+.memory-score p,
+.memory-safety p { color: #858c9b; }
+.memory-form input,
+.memory-form textarea {
+  border-color: rgba(255, 255, 255, .1);
+  background: #090b10;
+  color: #e9e7ef;
+}
+.memory-form input:focus,
+.memory-form textarea:focus { border-color: #7868ef; box-shadow: 0 0 0 3px rgba(120, 104, 239, .12); }
+.memory-score progress { background: #22242d; }
+.memory-use li { border-color: rgba(255, 255, 255, .08); }
+.memory-use li > span { background: rgba(124, 102, 244, .12); }
+.memory-safety { background: rgba(117, 95, 238, .065) !important; }
+.memory-safety > span { background: rgba(124, 102, 244, .15); }

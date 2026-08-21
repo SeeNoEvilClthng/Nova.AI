@@ -1,6 +1,7 @@
 const authState = { config: null, session: null };
 const sessionKey = "nova.supabase.session";
 const selectedPlanKey = "nova.selectedPlan";
+const selectedWorldKey = "nova.selectedWorld";
 let authMode = "signin";
 let sessionRefreshTimer = null;
 let refreshPromise = null;
@@ -145,7 +146,9 @@ async function initializeAuth() {
   if (showRecoveryForm()) return;
   const params = new URLSearchParams(location.search);
   const chosenPlan = params.get("plan");
+  const chosenWorld = params.get("world");
   if (["starter", "builder", "operator"].includes(chosenPlan)) localStorage.setItem(selectedPlanKey, chosenPlan);
+  if (["company", "reseller"].includes(chosenWorld)) localStorage.setItem(selectedWorldKey, chosenWorld);
   setAuthMode(params.get("mode"));
   if (!(await restoreSession())) document.body.classList.add("auth-required");
 }
@@ -185,8 +188,10 @@ document.getElementById("authForm").onsubmit = async event => {
     }
     storeSession(result);
     const selectedPlan = localStorage.getItem(selectedPlanKey);
+    const selectedWorld = localStorage.getItem(selectedWorldKey);
     if (selectedPlan) localStorage.removeItem(selectedPlanKey);
-    location.replace(selectedPlan ? "/?view=billing" : "/");
+    if (selectedWorld) localStorage.removeItem(selectedWorldKey);
+    location.replace(selectedPlan ? "/?view=billing" : selectedWorld === "reseller" ? "/reseller-studio" : "/");
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; }
 };

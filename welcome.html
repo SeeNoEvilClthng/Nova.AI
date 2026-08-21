@@ -6,9 +6,25 @@
   <meta name="description" content="Turn a business idea into validated strategy, coordinated AI employee work, and a launch-ready company—with founder approval at every important step.">
   <meta property="og:type" content="website"><meta property="og:site_name" content="Nova.Ai"><meta property="og:title" content="Nova.Ai — Your supervised AI company team"><meta property="og:description" content="Turn one clear business goal into coordinated strategy, research, product, growth, and operations work."><meta property="og:url" content="https://nova-ai-tau-one.vercel.app/welcome"><meta property="og:image" content="https://nova-ai-tau-one.vercel.app/og-nova.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Nova.Ai — Your supervised AI company team"><meta name="twitter:description" content="Build your company with a founder-supervised AI workforce."><meta name="twitter:image" content="https://nova-ai-tau-one.vercel.app/og-nova.png">
-  <link rel="icon" type="image/png" href="/nova-mark.png"><link rel="stylesheet" href="/public-site.css">
+  <link rel="icon" type="image/png" href="/nova-mark.png"><link rel="stylesheet" href="/public-site.css"><link rel="stylesheet" href="/world-gateway.css">
 </head>
 <body>
+  <section class="world-gateway" id="worldGateway" aria-labelledby="worldTitle">
+    <div class="world-stars" aria-hidden="true"></div>
+    <header class="world-gateway-header"><a class="public-brand" href="/welcome"><img src="/nova-mark.png" alt=""><b>NOVA<em>.ai</em></b></a><span>ONE INTELLIGENCE · TWO WORLDS</span></header>
+    <div class="world-intro"><span class="world-kicker">ENTER THE NOVA UNIVERSE</span><h1 id="worldTitle">Choose your world.</h1><p>Start with the experience built for what you want to accomplish today. You can move between worlds whenever you like.</p></div>
+    <div class="world-grid">
+      <button class="world-card world-card-company" data-world="company" type="button">
+        <span class="world-number">WORLD 01</span><div class="world-orbit" aria-hidden="true"><img src="/nova-mark.png" alt=""></div>
+        <div><small>BUILD &amp; OPERATE</small><h2>Nova HQ</h2><p>Turn a business idea into strategy, coordinated AI employee work, validation, and a launch-ready company.</p><b>Enter company world <i>→</i></b></div>
+      </button>
+      <a class="world-card world-card-reseller" data-world="reseller" href="/reseller">
+        <span class="world-number">WORLD 02</span><div class="world-orbit world-orbit-reseller" aria-hidden="true"><span>↗</span></div>
+        <div><small>LIST · MARKET · SELL</small><h2>Reseller Studio</h2><p>Transform inventory into polished listings, product pages, social content, and an always-on digital showroom.</p><b>Enter reseller world <i>→</i></b></div>
+      </a>
+    </div>
+    <footer class="world-gateway-footer"><span>FOCUS.</span><span>BUILD.</span><span>SELL.</span><span>SCALE.</span></footer>
+  </section>
   <nav class="public-nav"><a class="public-brand" href="/welcome"><img src="/nova-mark.png" alt=""><b>NOVA<em>.ai</em></b></a><div><a href="#workforce">AI workforce</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="/?mode=signin" class="nav-login">Sign in</a></div></nav>
   <main>
     <section class="public-hero">
@@ -28,4 +44,6 @@
     <section class="public-cta"><img src="/nova-mark.png" alt=""><div><small>YOUR NEXT COMPANY STARTS HERE</small><h2>Give the team a goal.</h2><p>Nova.Ai will help turn it into focused, reviewable work.</p></div><a href="/?mode=signup">Create account →</a></section>
   </main>
   <footer class="public-footer"><a class="public-brand" href="/welcome"><img src="/nova-mark.png" alt=""><b>NOVA<em>.ai</em></b></a><p>Focus. Build. Scale.</p><div><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/billing-policy">Billing policy</a><a href="mailto:novaai.founder@gmail.com">Contact</a><a href="/?mode=signin">Sign in</a></div><small>© 2026 Nova.Ai</small></footer>
+  <button class="world-switcher" id="worldSwitcher" type="button" aria-label="Choose another Nova world"><span>◌</span> Worlds</button>
+  <script src="/world-gateway.js"></script>
 </body></html>
