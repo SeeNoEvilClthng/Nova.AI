@@ -11,7 +11,7 @@ const execution = require("./execution-core");
 const toolPermissions = require("./tool-permissions");
 const crypto = require("node:crypto");
 
-const root = path.resolve(process.env.NOVA_APP_ROOT || process.cwd());
+const root = path.resolve(process.env.NOVA_APP_ROOT || __dirname);
 const port = Number(process.env.PORT || 4180);
 const receiptSecret=()=>{
   const secret=process.env.EXECUTION_RECEIPT_SECRET||process.env.SUPABASE_SECRET_KEY;

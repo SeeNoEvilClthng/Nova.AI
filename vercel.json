@@ -3,7 +3,13 @@
   "services": {
     "nova-ai": {
       "root": ".",
-      "entrypoint": "server.js"
+      "entrypoint": "src/index.ts",
+      "includeFiles": [
+        "*.html",
+        "*.css",
+        "*.js",
+        "*.png"
+      ]
     }
   },
   "rewrites": [
