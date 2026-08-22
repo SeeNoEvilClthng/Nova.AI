@@ -308,8 +308,12 @@ app.use(async (req, res) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   res.setHeader("X-Frame-Options", "DENY");
-  const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
-  const requestUrl = new URL(req.url, `http://${req.headers.host}`);
+  // Service rewrites can replace req.url while Express preserves the public path
+  // in originalUrl. Routing from originalUrl keeps nested pages and API endpoints
+  // working on Vercel, while remaining identical during local development.
+  const publicUrl = req.originalUrl || req.url;
+  const pathname = new URL(publicUrl, `http://${req.headers.host}`).pathname;
+  const requestUrl = new URL(publicUrl, `http://${req.headers.host}`);
   if (pathname === "/api/health" && req.method === "GET") return sendJson(res, 200, { status:"ok", service:"Nova.Ai", storage:supabase.configured()?"supabase":"sqlite" });
   if (pathname.startsWith("/p/") && req.method === "GET") {
     try { const page=await supabase.getPublishedPage(decodeURIComponent(pathname.slice(3))); return page ? (res.writeHead(200,{"Content-Type":"text/html","Cache-Control":"no-store"}),res.end(publicPageHtml(page))) : res.writeHead(404).end("Page not found"); }
