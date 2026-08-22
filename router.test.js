@@ -117,3 +117,8 @@ test("returns a reviewable reseller listing kit when model credentials are unava
     if(original.oidc===undefined)delete process.env.VERCEL_OIDC_TOKEN;else process.env.VERCEL_OIDC_TOKEN=original.oidc;
   }
 });
+
+test("creates an approval-only campaign fallback from verified product facts", async () => {
+  const original={openai:process.env.OPENAI_API_KEY,gateway:process.env.AI_GATEWAY_API_KEY,oidc:process.env.VERCEL_OIDC_TOKEN};delete process.env.OPENAI_API_KEY;delete process.env.AI_GATEWAY_API_KEY;delete process.env.VERCEL_OIDC_TOKEN;
+  try{const result=await router.generateResellerCampaign({goal:"Introduce this item to collectors",product:{name:"Sealed fragrance",category:"Fragrance",condition:"New",price:190,quantity:2,description:"Seller verified 70 mL bottle in its sealed original box."}});assert.equal(result.contribution.role,"Nova Campaign Copilot");assert.equal(result.contribution.model,"Demo engine");assert.match(result.campaign.caption,/Sealed fragrance/);assert.doesNotMatch(result.campaign.caption,/authentic/i);assert.ok(result.campaign.reviewWarnings.length>0)}finally{if(original.openai===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=original.openai;if(original.gateway===undefined)delete process.env.AI_GATEWAY_API_KEY;else process.env.AI_GATEWAY_API_KEY=original.gateway;if(original.oidc===undefined)delete process.env.VERCEL_OIDC_TOKEN;else process.env.VERCEL_OIDC_TOKEN=original.oidc}
+});

@@ -517,6 +517,20 @@ app.use(async (req, res) => {
       return sendJson(res,200,{listings:results});
     }catch(error){return sendJson(res,error.status||502,{error:error.message})}
   }
+  if (pathname === "/api/reseller/campaign-copilot" && req.method === "POST") {
+    try {
+      if(rateLimited(req,"reseller-campaign-copilot",20))return sendJson(res,429,{error:"Campaign Copilot reached its hourly preparation limit"});
+      const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),productId=String(input.productId||"").trim(),goal=String(input.goal||"").trim().slice(0,500),platforms=Array.isArray(input.platforms)?input.platforms.filter(value=>["instagram","facebook","x"].includes(value)).slice(0,3):[],preferredStyle=["editorial","minimal","sale"].includes(input.preferredStyle)?input.preferredStyle:"editorial",workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
+      const studio=workspace.state?.resellerStudio||{},product=(studio.inventory||[]).find(item=>item.id===productId&&item.status!=="draft");
+      if(!product)return sendJson(res,400,{error:"Choose a product with a prepared listing"});if(!goal)return sendJson(res,400,{error:"Tell Campaign Copilot what this campaign should accomplish"});if(!platforms.length)return sendJson(res,400,{error:"Choose at least one social channel"});
+      const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);
+      const result=await router.generateResellerCampaign({goal,platforms,preferredStyle,product:{name:String(product.name||"").slice(0,100),category:String(product.category||"").slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description||"").slice(0,1200)},userId:user?.id,workspaceId}),draft=result.campaign;
+      const campaign={id:crypto.randomUUID(),productId:product.id,product:{name:product.name,category:product.category,condition:product.condition,channel:product.channel,price:product.price,description:product.description},goal,message:String(draft.message||draft.headline||goal).slice(0,240),headline:String(draft.headline||"").slice(0,100),caption:`${String(draft.caption||"").trim()} ${String(draft.callToAction||"").trim()}`.trim().slice(0,500),callToAction:String(draft.callToAction||"").slice(0,160),platforms,style:preferredStyle,status:"draft",approvalRequired:true,createdBy:"campaign-copilot",createdAt:new Date().toISOString(),receipts:[],reviewWarnings:Array.isArray(draft.reviewWarnings)?draft.reviewWarnings.slice(0,4):[],contribution:result.contribution,warnings:result.warnings};
+      const state={...(workspace.state||{}),resellerStudio:{...studio,contentCampaigns:[campaign,...(studio.contentCampaigns||[])].slice(0,50)}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);
+      return sendJson(res,201,{campaign,contribution:result.contribution,warnings:result.warnings});
+    }catch(error){return sendJson(res,error.status||502,{error:error.message||"Campaign Copilot could not create the draft"})}
+  }
   if (pathname === "/api/state" && req.method === "PUT") {
     try {
       const value = await readBody(req);
