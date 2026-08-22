@@ -462,7 +462,7 @@ app.use(async (req, res) => {
       const input=await readBody(req),workspaceId=String(input.workspaceId||""),campaignId=String(input.campaignId||""),platform=String(input.platform||""),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
       if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
       if(platform!=="instagram")return sendJson(res,503,{error:`Connect ${platform} before publishing`});
-      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions);if(!permissions.marketing.publish)return sendJson(res,403,{error:"Enable Marketing publish permission in Connections before posting"});
+      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions);if(!permissions.marketing.publish&&input.confirmPublishPermission!==true)return sendJson(res,403,{error:"Confirm this Instagram publishing action before posting"});
       const campaigns=Array.isArray(workspace.state?.resellerStudio?.contentCampaigns)?workspace.state.resellerStudio.contentCampaigns:[],campaign=campaigns.find(item=>item.id===campaignId);
       if(!campaign)return sendJson(res,404,{error:"Content item not found"});
       if(!["approved","published"].includes(campaign.status))return sendJson(res,409,{error:"Approve this content before publishing"});
