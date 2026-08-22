@@ -18,7 +18,7 @@ const receiptSecret=()=>{
   if(process.env.NODE_ENV==="production")throw Object.assign(new Error("EXECUTION_RECEIPT_SECRET is required in production"),{status:503});
   return "nova-local-development-receipt-key";
 };
-const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png" };
+const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 const staticFiles = new Map([
   ["/", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/welcome", ["welcome.html", fs.readFileSync(path.join(__dirname, "welcome.html"))]],
@@ -29,6 +29,7 @@ const staticFiles = new Map([
   ["/billing-policy", ["billing-policy.html", fs.readFileSync(path.join(__dirname, "billing-policy.html"))]],
   ["/nova-mark.png", ["nova-mark.png", fs.readFileSync(path.join(__dirname, "nova-mark.png"))]],
   ["/og-nova.png", ["og-nova.png", fs.readFileSync(path.join(__dirname, "og-nova.png"))]],
+  ["/social/baccarat-rouge-540-xayresell-v3.png", ["baccarat-rouge-540-xayresell-v3.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-xayresell-v3.png"))]],
   ["/index.html", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/styles.css", ["styles.css", fs.readFileSync(path.join(__dirname, "styles.css"))]],
   ["/router.css", ["router.css", fs.readFileSync(path.join(__dirname, "router.css"))]],
@@ -444,6 +445,17 @@ app.use(async (req, res) => {
       const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions),instagram=await verifyInstagramConnection();
       return sendJson(res,200,{publishAllowed:permissions.marketing.publish,networks:[{id:"x",name:"X",configured:false,publishing:false,reason:"Connect X before publishing"},{id:"facebook",name:"Facebook",configured:false,publishing:false,reason:"Connect Facebook before publishing"},{id:"instagram",name:"Instagram",...instagram}]});
     }catch(error){return sendJson(res,error.status||500,{error:error.message||"Social connections could not load"});}
+  }
+  if (pathname === "/api/reseller/social/creative" && req.method === "POST") {
+    try {
+      const input=await readBody(req),workspaceId=String(input.workspaceId||""),campaignId=String(input.campaignId||""),assetUrl=new URL(String(input.assetUrl||"")),appUrl=new URL(String(process.env.APP_URL||"https://nova-ai-tau-one.vercel.app"));
+      if(assetUrl.origin!==appUrl.origin||!assetUrl.pathname.startsWith("/social/")||!staticFiles.has(assetUrl.pathname))return sendJson(res,400,{error:"Choose a Nova-hosted campaign creative"});
+      const workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});if(supabase.configured())await supabase.verifyUser(req);
+      const campaigns=Array.isArray(workspace.state?.resellerStudio?.contentCampaigns)?workspace.state.resellerStudio.contentCampaigns:[],campaign=campaigns.find(item=>item.id===campaignId);if(!campaign)return sendJson(res,404,{error:"Content item not found"});if(campaign.status==="published")return sendJson(res,409,{error:"Published content cannot be replaced"});
+      campaign.mediaUrl=assetUrl.href;campaign.mediaType="image/png";campaign.status="approved";campaign.approvedAt=new Date().toISOString();
+      const state={...(workspace.state||{}),resellerStudio:{...(workspace.state?.resellerStudio||{}),contentCampaigns:campaigns}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);
+      return sendJson(res,200,{campaign});
+    }catch(error){return sendJson(res,error.status||400,{error:error.message||"Creative could not be attached"});}
   }
   if (pathname === "/api/reseller/social/publish" && req.method === "POST") {
     try {
