@@ -113,6 +113,19 @@ async function findSubscriptionByStripeId(subscriptionId) {
   return rows[0] || null;
 }
 
+async function adminListWorkspaces() {
+  return adminRequest("/rest/v1/nova_workspaces?select=id,name,state,updated_at&order=updated_at.asc");
+}
+
+async function adminSaveWorkspace(id, state) {
+  const rows = await adminRequest(`/rest/v1/nova_workspaces?id=eq.${encodeURIComponent(id)}&select=id,name,state,updated_at`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ state, updated_at: new Date().toISOString() })
+  });
+  return rows[0] || null;
+}
+
 async function listValidation(req, workspaceId) {
   return request(`/rest/v1/nova_validation_entries?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,respondent_name,respondent_email,notes,demand_score,urgency_score,willingness_score,created_at&order=created_at.desc`, req);
 }
@@ -181,4 +194,4 @@ async function updateLead(req, id, status) {
   return rows[0] || null;
 }
 
-module.exports = { configured, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead };
+module.exports = { configured, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead };

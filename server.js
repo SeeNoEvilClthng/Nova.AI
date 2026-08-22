@@ -142,6 +142,23 @@ async function verifyInstagramConnection() {
   }
 }
 
+function nextCampaignRun(from = new Date()) {
+  const next = new Date(from);
+  next.setUTCDate(next.getUTCDate() + 2);
+  next.setUTCHours(17, 0, 0, 0);
+  return next.toISOString();
+}
+
+function scheduledCampaign(product, sequence = 0) {
+  const angles = [
+    { style:"editorial", lead:"A closer look at", close:"Review the verified details and decide if it belongs in your collection." },
+    { style:"minimal", lead:"Sealed, authentic, and available", close:"Message us while this verified item is still available." },
+    { style:"sale", lead:"Today’s featured find", close:"Available now from our verified inventory." },
+    { style:"editorial", lead:"For fragrance collectors", close:"See the condition, size, and included packaging before you buy." }
+  ], angle=angles[sequence%angles.length],name=String(product.name||"Featured product"),facts=String(product.description||"").slice(0,260),price=Number(product.price||0).toFixed(2);
+  return {id:crypto.randomUUID(),productId:product.id,product:{name,category:product.category,condition:product.condition,channel:product.channel,price:product.price,description:product.description},message:`${angle.lead}: ${name}. ${facts}`.slice(0,240),caption:`${angle.lead} ${name}. ${facts} $${price}. ${angle.close}`.slice(0,500),platforms:["instagram"],style:angle.style,status:"draft",scheduled:true,sequence,createdAt:new Date().toISOString(),receipts:[]};
+}
+
 function sendJson(res, status, value) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(value));
@@ -438,6 +455,21 @@ app.use(async (req, res) => {
     } catch (error) { return sendJson(res, error.status || 500, { error: error.message }); }
   }
   if (pathname === "/api/providers" && req.method === "GET") return sendJson(res, 200, router.providerStatus());
+  if (pathname === "/api/reseller/campaign-automation" && req.method === "POST") {
+    try {
+      const input=await readBody(req),workspaceId=String(input.workspaceId||""),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});if(supabase.configured())await supabase.verifyUser(req);
+      const previous=workspace.state?.resellerStudio?.campaignAutomation||{},enabled=input.enabled===true,automation={enabled,approvalRequired:true,intervalDays:2,timezone:"America/Phoenix",localHour:10,nextRunAt:enabled?(previous.nextRunAt&&new Date(previous.nextRunAt)>new Date()?previous.nextRunAt:nextCampaignRun()):null,lastPreparedAt:previous.lastPreparedAt||null,sequence:Number(previous.sequence||0)};
+      const state={...(workspace.state||{}),resellerStudio:{...(workspace.state?.resellerStudio||{}),campaignAutomation:automation}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);return sendJson(res,200,{automation});
+    }catch(error){return sendJson(res,error.status||500,{error:error.message||"Campaign schedule could not be saved"});}
+  }
+  if (pathname === "/api/cron/reseller-campaigns" && req.method === "GET") {
+    try {
+      if(!process.env.CRON_SECRET||String(req.headers.authorization||"")!==`Bearer ${process.env.CRON_SECRET}`)return sendJson(res,401,{error:"Unauthorized"});
+      const now=new Date(),workspaces=await supabase.adminListWorkspaces(),results=[];
+      for(const workspace of workspaces){const studio=workspace.state?.resellerStudio||{},automation=studio.campaignAutomation||{};if(!automation.enabled||!automation.nextRunAt||new Date(automation.nextRunAt)>now)continue;const inventory=Array.isArray(studio.inventory)?studio.inventory.filter(product=>product.status!=="draft"&&Number(product.quantity)>0):[];if(!inventory.length){results.push({workspaceId:workspace.id,status:"skipped",reason:"No prepared products"});continue}const sequence=Number(automation.sequence||0),product=inventory[sequence%inventory.length],campaign=scheduledCampaign(product,sequence),nextAutomation={...automation,approvalRequired:true,lastPreparedAt:now.toISOString(),nextRunAt:nextCampaignRun(now),sequence:sequence+1};const state={...(workspace.state||{}),resellerStudio:{...studio,contentCampaigns:[campaign,...(studio.contentCampaigns||[])].slice(0,50),campaignAutomation:nextAutomation}};await supabase.adminSaveWorkspace(workspace.id,state);results.push({workspaceId:workspace.id,status:"prepared",campaignId:campaign.id,productId:product.id})}
+      return sendJson(res,200,{ok:true,checked:workspaces.length,results});
+    }catch(error){return sendJson(res,error.status||500,{error:error.message||"Scheduled campaigns could not be prepared"});}
+  }
   if (pathname === "/api/reseller/social/status" && req.method === "GET") {
     try {
       const workspaceId=requestUrl.searchParams.get("workspace"),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);

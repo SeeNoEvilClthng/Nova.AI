@@ -8,5 +8,8 @@
   },
   "rewrites": [
     { "source": "/(.*)", "destination": { "service": "nova-ai" } }
+  ],
+  "crons": [
+    { "path": "/api/cron/reseller-campaigns", "schedule": "0 17 * * *" }
   ]
 }
