@@ -1,14 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
+  "experimentalServices": {
     "nova-ai": {
-      "root": ".",
-      "entrypoint": "server.js"
+      "entrypoint": "server.js",
+      "routePrefix": "/"
     }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": { "service": "nova-ai" } }
-  ],
   "crons": [
     { "path": "/api/cron/reseller-campaigns", "schedule": "0 17 * * *" }
   ]
