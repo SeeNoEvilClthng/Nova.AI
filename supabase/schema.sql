@@ -150,6 +150,30 @@ grant usage,select on sequence public.nova_page_events_id_seq to anon;
 create policy "Visitors can record published Nova page events" on public.nova_page_events for insert to anon with check (exists(select 1 from public.nova_published_pages p where p.id=page_id and p.published));
 create policy "Owners can read Nova page events" on public.nova_page_events for select to authenticated using (exists(select 1 from public.nova_published_pages p where p.id=page_id and p.user_id=(select auth.uid())));
 
+-- OAuth credentials are encrypted by the Nova server before storage. This
+-- table is intentionally unavailable through the public Data API, including
+-- to authenticated users; only the server secret may read or write it.
+create table if not exists public.nova_social_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  workspace_id uuid not null references public.nova_workspaces(id) on delete cascade,
+  provider text not null check (provider in ('instagram')),
+  account_id text not null,
+  username text not null,
+  encrypted_token text not null,
+  token_iv text not null,
+  token_tag text not null,
+  scopes text[] not null default '{}',
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, workspace_id, provider)
+);
+create index if not exists nova_social_connections_owner_idx on public.nova_social_connections(user_id, workspace_id);
+alter table public.nova_social_connections enable row level security;
+revoke all on public.nova_social_connections from anon, authenticated;
+grant select, insert, update, delete on public.nova_social_connections to service_role;
+
 -- Meta fetches approved graphics from this public bucket. Write and management
 -- access remains limited to the signed-in owner's folder.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -166,4 +190,4 @@ using (bucket_id='nova-social-media' and owner_id=(select auth.uid()::text));
 
 drop policy if exists "Nova users can delete their own social media" on storage.objects;
 create policy "Nova users can delete their own social media" on storage.objects for delete to authenticated
-using (bucket_id='nova-social-media' and owner_id=(select auth.uid()::text));su
+using (bucket_id='nova-social-media' and owner_id=(select auth.uid()::text));

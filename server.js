@@ -98,21 +98,16 @@ function productionReady() {
 }
 productionReady();
 
-function instagramConfig() {
-  const graphVersion = String(process.env.META_GRAPH_VERSION || "v26.0").trim();
-  const accessToken = String(process.env.INSTAGRAM_ACCESS_TOKEN || "").trim();
-  if (!accessToken || !/^v\d+\.\d+$/.test(graphVersion)) return null;
-  return {
-    graphVersion,
-    accessToken,
-    accountId: String(process.env.META_INSTAGRAM_USER_ID || "").trim(),
-    username: String(process.env.META_INSTAGRAM_USERNAME || "").trim().replace(/^@/, "").toLowerCase()
-  };
-}
+function socialEncryptionKey(){const raw=String(process.env.SOCIAL_TOKEN_ENCRYPTION_KEY||"").trim();if(!/^[a-f0-9]{64}$/i.test(raw))throw Object.assign(new Error("Social connection encryption is not configured"),{status:503});return Buffer.from(raw,"hex")}
+function encryptSocialToken(token){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv("aes-256-gcm",socialEncryptionKey(),iv),encrypted=Buffer.concat([cipher.update(token,"utf8"),cipher.final()]);return{encrypted_token:encrypted.toString("base64url"),token_iv:iv.toString("base64url"),token_tag:cipher.getAuthTag().toString("base64url")}}
+function decryptSocialToken(connection){const decipher=crypto.createDecipheriv("aes-256-gcm",socialEncryptionKey(),Buffer.from(connection.token_iv,"base64url"));decipher.setAuthTag(Buffer.from(connection.token_tag,"base64url"));return Buffer.concat([decipher.update(Buffer.from(connection.encrypted_token,"base64url")),decipher.final()]).toString("utf8")}
+function instagramOAuthConfig(){const appId=String(process.env.META_APP_ID||"").trim(),appSecret=String(process.env.META_APP_SECRET||"").trim(),appUrl=String(process.env.APP_URL||"").replace(/\/$/,"");if(!appId||!appSecret||!appUrl)return null;return{appId,appSecret,appUrl,redirectUri:`${appUrl}/api/reseller/social/instagram/callback`,graphVersion:String(process.env.META_GRAPH_VERSION||"v26.0")}}
+function signInstagramState(value){const config=instagramOAuthConfig();if(!config)throw Object.assign(new Error("Instagram OAuth is not configured"),{status:503});const payload=Buffer.from(JSON.stringify({...value,exp:Date.now()+10*60_000,nonce:crypto.randomUUID()})).toString("base64url"),signature=crypto.createHmac("sha256",config.appSecret).update(payload).digest("base64url");return`${payload}.${signature}`}
+function verifyInstagramState(state){const config=instagramOAuthConfig(),[payload,signature]=String(state||"").split(".");if(!config||!payload||!signature)throw Object.assign(new Error("Instagram connection request is invalid"),{status:400});const expected=crypto.createHmac("sha256",config.appSecret).update(payload).digest();const supplied=Buffer.from(signature,"base64url");if(supplied.length!==expected.length||!crypto.timingSafeEqual(supplied,expected))throw Object.assign(new Error("Instagram connection request could not be verified"),{status:400});const value=JSON.parse(Buffer.from(payload,"base64url").toString("utf8"));if(Number(value.exp)<Date.now())throw Object.assign(new Error("Instagram connection request expired"),{status:400});return value}
+async function instagramConnection(userId,workspaceId){const saved=await supabase.getSocialConnection(userId,workspaceId,"instagram");if(!saved)return null;return{graphVersion:String(process.env.META_GRAPH_VERSION||"v26.0"),accessToken:decryptSocialToken(saved),accountId:String(saved.account_id||""),username:String(saved.username||"").toLowerCase(),expiresAt:saved.expires_at}}
 
-async function publishInstagram(campaign) {
-  const config = instagramConfig();
-  if (!config) throw Object.assign(new Error("Add the Instagram access token to Vercel before publishing"), { status: 503 });
+async function publishInstagram(campaign, config) {
+  if (!config) throw Object.assign(new Error("Connect your Instagram professional account before publishing"), { status: 503 });
   if (!/^https:\/\//.test(String(campaign.mediaUrl || ""))) throw Object.assign(new Error("Approve this content again to prepare its public graphic"), { status: 409 });
   const base = `https://graph.instagram.com/${config.graphVersion}`, headers = { Authorization: `Bearer ${config.accessToken}` };
   const identityResponse = await fetch(`${base}/me?fields=user_id,username`, { headers }), identity = await identityResponse.json();
@@ -128,9 +123,9 @@ async function publishInstagram(campaign) {
   return String(published.id || "");
 }
 
-async function verifyInstagramConnection() {
-  const config = instagramConfig();
-  if (!config) return { configured: false, publishing: false, reason: "Add the Instagram professional account token" };
+async function verifyInstagramConnection(config) {
+  if (!config) return { configured: false, publishing: false, reason: "Connect your Instagram professional account" };
+  if(config.expiresAt&&new Date(config.expiresAt)<=new Date())return{configured:true,publishing:false,reason:"Instagram access expired. Reconnect your account."};
   try {
     const response = await fetch(`https://graph.instagram.com/${config.graphVersion}/me?fields=user_id,username`, { headers: { Authorization: `Bearer ${config.accessToken}` } }), identity = await response.json();
     if (!response.ok) return { configured: true, publishing: false, reason: identity?.error?.message || "Instagram rejected the saved token" };
@@ -455,6 +450,15 @@ app.use(async (req, res) => {
     } catch (error) { return sendJson(res, error.status || 500, { error: error.message }); }
   }
   if (pathname === "/api/providers" && req.method === "GET") return sendJson(res, 200, router.providerStatus());
+  if (pathname === "/api/reseller/social/instagram/connect" && req.method === "POST") {
+    try{const config=instagramOAuthConfig();if(!config)return sendJson(res,503,{error:"Add META_APP_ID and META_APP_SECRET in Vercel first"});const user=await supabase.verifyUser(req),input=await readBody(req),workspaceId=String(input.workspaceId||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});socialEncryptionKey();const state=signInstagramState({userId:user.id,workspaceId}),url=new URL("https://www.instagram.com/oauth/authorize");url.search=new URLSearchParams({enable_fb_login:"0",force_authentication:"1",client_id:config.appId,redirect_uri:config.redirectUri,response_type:"code",scope:"instagram_business_basic,instagram_business_content_publish",state}).toString();return sendJson(res,200,{url:url.href})}catch(error){return sendJson(res,error.status||500,{error:error.message||"Instagram connection could not start"})}
+  }
+  if (pathname === "/api/reseller/social/instagram/callback" && req.method === "GET") {
+    try{const config=instagramOAuthConfig(),state=verifyInstagramState(requestUrl.searchParams.get("state")),code=String(requestUrl.searchParams.get("code")||"").replace(/#_$/,"");if(!code)throw Object.assign(new Error(requestUrl.searchParams.get("error_description")||"Instagram did not authorize this connection"),{status:400});const workspaceRows=await supabase.adminListWorkspaces(),workspace=workspaceRows.find(item=>item.id===state.workspaceId);if(!workspace)throw Object.assign(new Error("Workspace not found"),{status:404});const tokenResponse=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:config.appId,client_secret:config.appSecret,grant_type:"authorization_code",redirect_uri:config.redirectUri,code})}),shortToken=await tokenResponse.json();if(!tokenResponse.ok||!shortToken.access_token)throw new Error(shortToken?.error_message||shortToken?.error?.message||"Instagram rejected the authorization code");const longResponse=await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({grant_type:"ig_exchange_token",client_secret:config.appSecret,access_token:shortToken.access_token})}`),longToken=await longResponse.json(),accessToken=longResponse.ok&&longToken.access_token?longToken.access_token:shortToken.access_token,identityResponse=await fetch(`https://graph.instagram.com/${config.graphVersion}/me?fields=user_id,username`,{headers:{Authorization:`Bearer ${accessToken}`}}),identity=await identityResponse.json();if(!identityResponse.ok)throw new Error(identity?.error?.message||"Instagram account details could not be verified");const accountId=String(identity.user_id||identity.id||shortToken.user_id||"");if(!accountId)throw new Error("Instagram did not return a professional account ID");const expiresIn=Number(longToken.expires_in||0),encrypted=encryptSocialToken(accessToken);await supabase.upsertSocialConnection({user_id:state.userId,workspace_id:state.workspaceId,provider:"instagram",account_id:accountId,username:String(identity.username||"instagram account").replace(/^@/,"").toLowerCase(),...encrypted,scopes:["instagram_business_basic","instagram_business_content_publish"],expires_at:expiresIn?new Date(Date.now()+expiresIn*1000).toISOString():null});res.writeHead(302,{Location:`/reseller-studio?view=content&instagram=connected`});return res.end()}catch(error){res.writeHead(302,{Location:`/reseller-studio?view=content&instagram=error&message=${encodeURIComponent(String(error.message||"Connection failed").slice(0,160))}`});return res.end()}
+  }
+  if (pathname === "/api/reseller/social/instagram/disconnect" && req.method === "POST") {
+    try{const user=await supabase.verifyUser(req),input=await readBody(req),workspaceId=String(input.workspaceId||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});await supabase.deleteSocialConnection(user.id,workspaceId,"instagram");return sendJson(res,200,{disconnected:true})}catch(error){return sendJson(res,error.status||500,{error:error.message||"Instagram could not be disconnected"})}
+  }
   if (pathname === "/api/reseller/campaign-automation" && req.method === "POST") {
     try {
       const input=await readBody(req),workspaceId=String(input.workspaceId||""),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});if(supabase.configured())await supabase.verifyUser(req);
@@ -472,9 +476,9 @@ app.use(async (req, res) => {
   }
   if (pathname === "/api/reseller/social/status" && req.method === "GET") {
     try {
-      const workspaceId=requestUrl.searchParams.get("workspace"),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      const workspaceId=requestUrl.searchParams.get("workspace"),user=supabase.configured()?await supabase.verifyUser(req):null,workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
       if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
-      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions),instagram=await verifyInstagramConnection();
+      const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions),instagram=user?await verifyInstagramConnection(await instagramConnection(user.id,workspaceId)): {configured:false,publishing:false,reason:"Sign in to connect Instagram"};
       return sendJson(res,200,{publishAllowed:permissions.marketing.publish,networks:[{id:"x",name:"X",configured:false,publishing:false,reason:"Connect X before publishing"},{id:"facebook",name:"Facebook",configured:false,publishing:false,reason:"Connect Facebook before publishing"},{id:"instagram",name:"Instagram",...instagram}]});
     }catch(error){return sendJson(res,error.status||500,{error:error.message||"Social connections could not load"});}
   }
@@ -491,7 +495,7 @@ app.use(async (req, res) => {
   }
   if (pathname === "/api/reseller/social/publish" && req.method === "POST") {
     try {
-      const input=await readBody(req),workspaceId=String(input.workspaceId||""),campaignId=String(input.campaignId||""),platform=String(input.platform||""),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||""),campaignId=String(input.campaignId||""),platform=String(input.platform||""),workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
       if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
       if(platform!=="instagram")return sendJson(res,503,{error:`Connect ${platform} before publishing`});
       const permissions=toolPermissions.normalizePermissions(workspace.state?.toolPermissions);if(!permissions.marketing.publish&&input.confirmPublishPermission!==true)return sendJson(res,403,{error:"Confirm this Instagram publishing action before posting"});
@@ -500,8 +504,7 @@ app.use(async (req, res) => {
       if(!["approved","published"].includes(campaign.status))return sendJson(res,409,{error:"Approve this content before publishing"});
       if(!Array.isArray(campaign.platforms)||!campaign.platforms.includes(platform))return sendJson(res,400,{error:"Instagram is not selected for this content"});
       if((campaign.receipts||[]).some(item=>item.platform===platform))return sendJson(res,409,{error:"This content has already been published to Instagram"});
-      if(supabase.configured())await supabase.verifyUser(req);
-      const postId=await publishInstagram(campaign),publishedAt=new Date().toISOString();campaign.receipts=[...(campaign.receipts||[]),{platform,postId,publishedAt}];campaign.status=campaign.platforms.every(network=>campaign.receipts.some(item=>item.platform===network))?"published":"approved";if(campaign.status==="published")campaign.publishedAt=publishedAt;
+      const connection=user?await instagramConnection(user.id,workspaceId):null,postId=await publishInstagram(campaign,connection),publishedAt=new Date().toISOString();campaign.receipts=[...(campaign.receipts||[]),{platform,postId,publishedAt}];campaign.status=campaign.platforms.every(network=>campaign.receipts.some(item=>item.platform===network))?"published":"approved";if(campaign.status==="published")campaign.publishedAt=publishedAt;
       const state={...(workspace.state||{}),resellerStudio:{...(workspace.state?.resellerStudio||{}),contentCampaigns:campaigns}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);
       return sendJson(res,200,{published:true,platform,postId,campaign});
     }catch(error){return sendJson(res,error.status||502,{error:error.message||"Approved content could not be published"});}
@@ -520,13 +523,13 @@ app.use(async (req, res) => {
   if (pathname === "/api/reseller/campaign-copilot" && req.method === "POST") {
     try {
       if(rateLimited(req,"reseller-campaign-copilot",20))return sendJson(res,429,{error:"Campaign Copilot reached its hourly preparation limit"});
-      const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),productId=String(input.productId||"").trim(),goal=String(input.goal||"").trim().slice(0,500),platforms=Array.isArray(input.platforms)?input.platforms.filter(value=>["instagram","facebook","x"].includes(value)).slice(0,3):[],preferredStyle=["editorial","minimal","sale"].includes(input.preferredStyle)?input.preferredStyle:"editorial",workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
+      const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),productId=String(input.productId||"").trim(),goal=String(input.goal||"").trim().slice(0,500),audience=String(input.audience||"").trim().slice(0,160),tone=String(input.tone||"polished").trim().slice(0,40),callToAction=String(input.callToAction||"").trim().slice(0,160),instructions=String(input.instructions||"").trim().slice(0,500),platforms=Array.isArray(input.platforms)?input.platforms.filter(value=>["instagram","facebook","x"].includes(value)).slice(0,3):[],preferredStyle=["editorial","minimal","sale"].includes(input.preferredStyle)?input.preferredStyle:"editorial",workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
       if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
       const studio=workspace.state?.resellerStudio||{},product=(studio.inventory||[]).find(item=>item.id===productId&&item.status!=="draft");
       if(!product)return sendJson(res,400,{error:"Choose a product with a prepared listing"});if(!goal)return sendJson(res,400,{error:"Tell Campaign Copilot what this campaign should accomplish"});if(!platforms.length)return sendJson(res,400,{error:"Choose at least one social channel"});
       const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);
-      const result=await router.generateResellerCampaign({goal,platforms,preferredStyle,product:{name:String(product.name||"").slice(0,100),category:String(product.category||"").slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description||"").slice(0,1200)},userId:user?.id,workspaceId}),draft=result.campaign;
-      const campaign={id:crypto.randomUUID(),productId:product.id,product:{name:product.name,category:product.category,condition:product.condition,channel:product.channel,price:product.price,description:product.description},goal,message:String(draft.message||draft.headline||goal).slice(0,240),headline:String(draft.headline||"").slice(0,100),caption:`${String(draft.caption||"").trim()} ${String(draft.callToAction||"").trim()}`.trim().slice(0,500),callToAction:String(draft.callToAction||"").slice(0,160),platforms,style:preferredStyle,status:"draft",approvalRequired:true,createdBy:"campaign-copilot",createdAt:new Date().toISOString(),receipts:[],reviewWarnings:Array.isArray(draft.reviewWarnings)?draft.reviewWarnings.slice(0,4):[],contribution:result.contribution,warnings:result.warnings};
+      const result=await router.generateResellerCampaign({goal,audience,tone,callToAction,instructions,platforms,preferredStyle,product:{name:String(product.name||"").slice(0,100),category:String(product.category||"").slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description||"").slice(0,1200)},userId:user?.id,workspaceId}),draft=result.campaign;
+      const campaign={id:crypto.randomUUID(),productId:product.id,product:{name:product.name,category:product.category,condition:product.condition,channel:product.channel,price:product.price,description:product.description},brief:{goal,audience,tone,callToAction,instructions},goal,message:String(draft.message||draft.headline||goal).slice(0,240),headline:String(draft.headline||"").slice(0,100),caption:`${String(draft.caption||"").trim()} ${String(draft.callToAction||"").trim()}`.trim().slice(0,500),callToAction:String(draft.callToAction||"").slice(0,160),platforms,style:preferredStyle,status:"draft",approvalRequired:true,createdBy:"campaign-copilot",createdAt:new Date().toISOString(),receipts:[],reviewWarnings:Array.isArray(draft.reviewWarnings)?draft.reviewWarnings.slice(0,4):[],contribution:result.contribution,warnings:result.warnings};
       const state={...(workspace.state||{}),resellerStudio:{...studio,contentCampaigns:[campaign,...(studio.contentCampaigns||[])].slice(0,50)}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);
       return sendJson(res,201,{campaign,contribution:result.contribution,warnings:result.warnings});
     }catch(error){return sendJson(res,error.status||502,{error:error.message||"Campaign Copilot could not create the draft"})}

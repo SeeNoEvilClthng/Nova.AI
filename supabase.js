@@ -126,6 +126,21 @@ async function adminSaveWorkspace(id, state) {
   return rows[0] || null;
 }
 
+async function getSocialConnection(userId, workspaceId, provider) {
+  const rows=await adminRequest(`/rest/v1/nova_social_connections?user_id=eq.${encodeURIComponent(userId)}&workspace_id=eq.${encodeURIComponent(workspaceId)}&provider=eq.${encodeURIComponent(provider)}&select=*&limit=1`);
+  return rows[0]||null;
+}
+
+async function upsertSocialConnection(value) {
+  const rows=await adminRequest("/rest/v1/nova_social_connections?on_conflict=user_id,workspace_id,provider",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({...value,updated_at:new Date().toISOString()})});
+  return rows[0]||null;
+}
+
+async function deleteSocialConnection(userId, workspaceId, provider) {
+  const rows=await adminRequest(`/rest/v1/nova_social_connections?user_id=eq.${encodeURIComponent(userId)}&workspace_id=eq.${encodeURIComponent(workspaceId)}&provider=eq.${encodeURIComponent(provider)}&select=id`,{method:"DELETE",headers:{Prefer:"return=representation"}});
+  return Boolean(rows[0]);
+}
+
 async function listValidation(req, workspaceId) {
   return request(`/rest/v1/nova_validation_entries?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,respondent_name,respondent_email,notes,demand_score,urgency_score,willingness_score,created_at&order=created_at.desc`, req);
 }
@@ -194,4 +209,4 @@ async function updateLead(req, id, status) {
   return rows[0] || null;
 }
 
-module.exports = { configured, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead };
+module.exports = { configured, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead };
