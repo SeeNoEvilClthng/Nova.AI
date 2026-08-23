@@ -26,6 +26,7 @@ body {
 }
 
 .sidebar {
+  z-index:60;
   width: 244px;
   padding: 24px 16px;
   border-right: 1px solid var(--line);
