@@ -19,7 +19,7 @@ const receiptSecret=()=>{
   return "nova-local-development-receipt-key";
 };
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
-const auraSocietyCatalog = JSON.parse(fs.readFileSync(path.join(__dirname, "data/aura-society-catalog.json"), "utf8"));
+const auraSocietyCatalog = require("./data/aura-society-catalog.json");
 const staticFiles = new Map([
   ["/", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/welcome", ["welcome.html", fs.readFileSync(path.join(__dirname, "welcome.html"))]],
