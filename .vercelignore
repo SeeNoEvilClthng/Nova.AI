@@ -3,7 +3,8 @@
 !.env.example
 .git
 .vercel
-data
+data/*
+!data/aura-society-catalog.json
 node_modules
 Dockerfile
 render.yaml
