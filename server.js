@@ -530,8 +530,8 @@ app.use(async (req, res) => {
       const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),products=Array.isArray(input.products)?input.products.slice(0,5):[];
       if(!workspaceId||!products.length)return sendJson(res,400,{error:"Choose at least one product to prepare"});
       if(products.some(product=>!String(product.name||"").trim()||!String(product.category||"").trim()||String(product.description||"").trim().length<10))return sendJson(res,400,{error:"Every product needs a name, category, and verified details"});
-      const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);const results=[];
-      for(const product of products)results.push(await router.generateResellerListing({product:{name:String(product.name).slice(0,100),sku:String(product.sku||"").slice(0,40),category:String(product.category).slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description).slice(0,1200)},userId:user?.id,workspaceId}));
+      const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);
+      const results=await Promise.all(products.map(product=>router.generateResellerListing({product:{name:String(product.name).slice(0,100),sku:String(product.sku||"").slice(0,40),category:String(product.category).slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description).slice(0,1200)},userId:user?.id,workspaceId})));
       return sendJson(res,200,{listings:results});
     }catch(error){return sendJson(res,error.status||502,{error:error.message})}
   }
