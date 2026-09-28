@@ -20,6 +20,7 @@ const receiptSecret=()=>{
 };
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 const auraSocietyCatalog = require("./data/aura-society-catalog.json");
+const verifiedAuraImageIds = new Set(auraSocietyCatalog.slice(0, 11).map(product => String(product.id)));
 const staticFiles = new Map([
   ["/", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/welcome", ["welcome.html", fs.readFileSync(path.join(__dirname, "welcome.html"))]],
@@ -548,7 +549,13 @@ app.use(async (req, res) => {
       const importedAt = new Date().toISOString();
       for (const source of auraSocietyCatalog) {
         const id = String(source.id || "").slice(0, 100);
-        if (!id || byId.has(id)) continue;
+        if (!id) continue;
+        const imageUrl = verifiedAuraImageIds.has(id) ? `/product-images/aura/${id}.png` : "";
+        if (byId.has(id)) {
+          const current = byId.get(id);
+          if (imageUrl && !current.imageUrl) byId.set(id, { ...current, imageUrl, updatedAt: importedAt });
+          continue;
+        }
         byId.set(id, {
           id,
           name: String(source.name || "").trim().slice(0, 100),
@@ -558,6 +565,7 @@ app.use(async (req, res) => {
           quantity: Math.max(0, Math.floor(Number(source.stock) || 0)),
           condition: "New",
           channel: "Aura Society Co.",
+          imageUrl,
           description: `${String(source.brand || "Fragrance")} · ${String(source.size || "Size not listed")}. ${String(source.description || "")} Notes: ${String(source.notes || "")}`.trim().slice(0, 1200),
           status: "draft",
           listingTitle: "",
