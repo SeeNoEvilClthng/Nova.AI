@@ -11,6 +11,20 @@ test("billing stays disabled without a test key", () => {
   if (previous === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = previous;
 });
 
+test("recognizes safer restricted Stripe keys", () => {
+  const previousKey = process.env.STRIPE_SECRET_KEY;
+  const previousLive = process.env.ALLOW_STRIPE_LIVE;
+  const previousPrice = process.env.STRIPE_STARTER_PRICE_ID;
+  process.env.STRIPE_SECRET_KEY = "rk_live_nova_test";
+  process.env.ALLOW_STRIPE_LIVE = "true";
+  process.env.STRIPE_STARTER_PRICE_ID = "price_starter";
+  assert.equal(billing.status().mode, "live");
+  assert.equal(billing.status().enabled, true);
+  if (previousKey === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = previousKey;
+  if (previousLive === undefined) delete process.env.ALLOW_STRIPE_LIVE; else process.env.ALLOW_STRIPE_LIVE = previousLive;
+  if (previousPrice === undefined) delete process.env.STRIPE_STARTER_PRICE_ID; else process.env.STRIPE_STARTER_PRICE_ID = previousPrice;
+});
+
 test("verifies a valid Stripe webhook signature", () => {
   const previous = process.env.STRIPE_WEBHOOK_SECRET;
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_nova_test";

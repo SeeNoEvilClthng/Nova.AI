@@ -191,7 +191,7 @@ document.getElementById("authForm").onsubmit = async event => {
     const selectedWorld = localStorage.getItem(selectedWorldKey);
     if (selectedPlan) localStorage.removeItem(selectedPlanKey);
     if (selectedWorld) localStorage.removeItem(selectedWorldKey);
-    location.replace(selectedPlan ? "/?view=billing" : selectedWorld === "reseller" ? "/reseller-studio" : "/");
+    location.replace(selectedPlan ? `/?view=billing&checkout=${encodeURIComponent(selectedPlan)}` : selectedWorld === "reseller" ? "/reseller-studio" : "/");
   } catch (error) { message.textContent = error.message; }
   finally { button.disabled = false; }
 };

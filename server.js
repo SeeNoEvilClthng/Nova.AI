@@ -63,6 +63,7 @@ const staticFiles = new Map([
   ["/public-site.css", ["public-site.css", fs.readFileSync(path.join(__dirname, "public-site.css"))]],
   ["/world-gateway.css", ["world-gateway.css", fs.readFileSync(path.join(__dirname, "world-gateway.css"))]],
   ["/world-gateway.js", ["world-gateway.js", fs.readFileSync(path.join(__dirname, "world-gateway.js"))]],
+  ["/welcome-billing.js", ["welcome-billing.js", fs.readFileSync(path.join(__dirname, "welcome-billing.js"))]],
   ["/reseller-app.css", ["reseller-app.css", fs.readFileSync(path.join(__dirname, "reseller-app.css"))]],
   ["/reseller-ai.css", ["reseller-ai.css", fs.readFileSync(path.join(__dirname, "reseller-ai.css"))]],
   ["/reseller-content.css", ["reseller-content.css", fs.readFileSync(path.join(__dirname, "reseller-content.css"))]],
@@ -349,7 +350,16 @@ app.use(async (req, res) => {
     catch (error) { return sendJson(res, error.status || 500, { error: error.message }); }
   }
   if (pathname === "/api/billing/checkout" && req.method === "POST") {
-    try { const user = await supabase.verifyUser(req); const input = await readBody(req); const session = await billing.createCheckout(user, input.plan); return sendJson(res, 200, { url: session.url }); }
+    try {
+      const user = await supabase.verifyUser(req);
+      const subscription = await supabase.getSubscription(req);
+      if (subscription && new Set(["active", "trialing"]).has(subscription.status)) {
+        return sendJson(res, 409, { error: "This account already has an active subscription. Use Manage subscription to make changes." });
+      }
+      const input = await readBody(req);
+      const session = await billing.createCheckout(user, input.plan);
+      return sendJson(res, 200, { url: session.url });
+    }
     catch (error) { return sendJson(res, error.status || 500, { error: error.message }); }
   }
   if (pathname === "/api/billing/portal" && req.method === "POST") {
@@ -577,7 +587,13 @@ app.use(async (req, res) => {
   }
   const asset = staticFiles.get(pathname);
   if (!asset) return res.writeHead(404).end("Not found");
-  res.writeHead(200, { "Content-Type": types[path.extname(asset[0])] || "application/octet-stream" });
+  const extension = path.extname(asset[0]);
+  const cacheControl = extension === ".html"
+    ? "no-cache"
+    : extension === ".png"
+      ? "public, max-age=86400, stale-while-revalidate=604800"
+      : "public, max-age=300, stale-while-revalidate=86400";
+  res.writeHead(200, { "Content-Type": types[extension] || "application/octet-stream", "Cache-Control": cacheControl });
   res.end(asset[1]);
 });
 

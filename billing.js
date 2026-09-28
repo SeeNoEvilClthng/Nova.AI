@@ -8,7 +8,7 @@ const plans = () => ({
   builder: process.env.STRIPE_BUILDER_PRICE_ID || "",
   operator: process.env.STRIPE_OPERATOR_PRICE_ID || ""
 });
-const mode = () => stripeSecret().startsWith("sk_test_") ? "test" : stripeSecret().startsWith("sk_live_") ? "live" : "unconfigured";
+const mode = () => /^(?:sk|rk)_test_/.test(stripeSecret()) ? "test" : /^(?:sk|rk)_live_/.test(stripeSecret()) ? "live" : "unconfigured";
 const liveAllowed = () => process.env.ALLOW_STRIPE_LIVE === "true";
 
 function status() {
