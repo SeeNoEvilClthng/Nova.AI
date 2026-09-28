@@ -19,6 +19,7 @@ const receiptSecret=()=>{
   return "nova-local-development-receipt-key";
 };
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
+const auraSocietyCatalog = JSON.parse(fs.readFileSync(path.join(__dirname, "data/aura-society-catalog.json"), "utf8"));
 const staticFiles = new Map([
   ["/", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/welcome", ["welcome.html", fs.readFileSync(path.join(__dirname, "welcome.html"))]],
@@ -533,6 +534,51 @@ app.use(async (req, res) => {
       for(const product of products)results.push(await router.generateResellerListing({product:{name:String(product.name).slice(0,100),sku:String(product.sku||"").slice(0,40),category:String(product.category).slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description).slice(0,1200)},userId:user?.id,workspaceId}));
       return sendJson(res,200,{listings:results});
     }catch(error){return sendJson(res,error.status||502,{error:error.message})}
+  }
+  if (pathname === "/api/reseller/catalog/aura-society" && req.method === "POST") {
+    try {
+      const user = supabase.configured() ? await supabase.verifyUser(req) : null;
+      const input = await readBody(req);
+      const workspaceId = String(input.workspaceId || "").trim();
+      const workspace = supabase.configured() ? await supabase.getWorkspace(req, workspaceId) : database.getWorkspace(workspaceId);
+      if (!workspace) return sendJson(res, 404, { error: "Workspace not found" });
+      const studio = workspace.state?.resellerStudio || {};
+      const existing = Array.isArray(studio.inventory) ? studio.inventory : [];
+      const byId = new Map(existing.map(product => [String(product.id), product]));
+      const importedAt = new Date().toISOString();
+      for (const source of auraSocietyCatalog) {
+        const id = String(source.id || "").slice(0, 100);
+        if (!id || byId.has(id)) continue;
+        byId.set(id, {
+          id,
+          name: String(source.name || "").trim().slice(0, 100),
+          sku: id.slice(0, 40),
+          category: `${String(source.brand || "Fragrance")} · ${String(source.family || "Other")}`.slice(0, 60),
+          price: Math.max(0, Number(source.price) || 0),
+          quantity: Math.max(0, Math.floor(Number(source.stock) || 0)),
+          condition: "New",
+          channel: "Aura Society Co.",
+          description: `${String(source.brand || "Fragrance")} · ${String(source.size || "Size not listed")}. ${String(source.description || "")} Notes: ${String(source.notes || "")}`.trim().slice(0, 1200),
+          status: "draft",
+          listingTitle: "",
+          listingCopy: "",
+          listingTags: [],
+          socialCaption: "",
+          pricingGuidance: "",
+          reviewWarnings: [],
+          listingAgent: null,
+          createdAt: importedAt,
+          updatedAt: importedAt
+        });
+      }
+      const inventory = [...byId.values()];
+      const state = { ...workspace.state, resellerStudio: { ...studio, inventory } };
+      if (supabase.configured()) await supabase.saveWorkspace(req, workspaceId, state);
+      else database.saveWorkspace(workspaceId, state);
+      return sendJson(res, 200, { imported: inventory.length - existing.length, total: inventory.length });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { error: error.message || "Aura Society catalog could not be imported" });
+    }
   }
   if (pathname === "/api/reseller/campaign-copilot" && req.method === "POST") {
     try {
