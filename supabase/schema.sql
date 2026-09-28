@@ -170,6 +170,7 @@ create table if not exists public.nova_social_connections (
   unique (user_id, workspace_id, provider)
 );
 create index if not exists nova_social_connections_owner_idx on public.nova_social_connections(user_id, workspace_id);
+create index if not exists nova_social_connections_workspace_idx on public.nova_social_connections(workspace_id);
 alter table public.nova_social_connections enable row level security;
 revoke all on public.nova_social_connections from anon, authenticated;
 grant select, insert, update, delete on public.nova_social_connections to service_role;
