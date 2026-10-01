@@ -165,12 +165,18 @@ function sendJson(res, status, value) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    let body = "", size = 0, settled = false;
     req.on("data", chunk => {
+      if (settled) return;
+      size += Buffer.byteLength(chunk);
+      if (size > 2_000_000) {
+        settled = true;
+        return reject(Object.assign(new Error("Request too large"), { status: 413 }));
+      }
       body += chunk;
-      if (body.length > 100_000) reject(new Error("Request too large"));
     });
     req.on("end", () => {
+      if (settled) return;
       try { resolve(JSON.parse(body || "{}")); } catch { reject(new Error("Invalid JSON")); }
     });
     req.on("error", reject);
