@@ -12,9 +12,9 @@
     "workflow": "^5.0.0-beta.42"
   },
   "scripts": {
-    "dev": "npm run build && PORT=4180 node --env-file-if-exists=.env .output/server/index.mjs",
+    "dev": "PORT=4180 node --env-file-if-exists=.env server.js",
     "build": "nitro build",
-    "start": "npm run build && PORT=4180 node --env-file-if-exists=.env .output/server/index.mjs",
+    "start": "PORT=4180 node --env-file-if-exists=.env server.js",
     "check": "node --check server.js && node --check database.js && node --check supabase.js && node --check billing.js && node --check router.js && node --check execution-core.js && node --check tool-permissions.js && node --check auth.js && node --check app.js && node --check billing-client.js && node --check validation.js && node --check live-kpis.js && node --check revenue.js && node --check execution-engine.js && node --check minimal-ui.js && node --check durable-missions.js && node --check connections.js && node --check reseller-app.js",
     "test": "node --test *.test.js"
   },

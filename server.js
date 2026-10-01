@@ -29,6 +29,7 @@ const staticFiles = new Map([
   ["/privacy", ["privacy.html", fs.readFileSync(path.join(__dirname, "privacy.html"))]],
   ["/terms", ["terms.html", fs.readFileSync(path.join(__dirname, "terms.html"))]],
   ["/billing-policy", ["billing-policy.html", fs.readFileSync(path.join(__dirname, "billing-policy.html"))]],
+  ["/shipping-returns", ["shipping-returns.html", fs.readFileSync(path.join(__dirname, "shipping-returns.html"))]],
   ["/nova-mark.png", ["nova-mark.png", fs.readFileSync(path.join(__dirname, "nova-mark.png"))]],
   ["/og-nova.png", ["og-nova.png", fs.readFileSync(path.join(__dirname, "og-nova.png"))]],
   ["/social/baccarat-rouge-540-xayresell-v3.png", ["baccarat-rouge-540-xayresell-v3.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-xayresell-v3.png"))]],
