@@ -22,6 +22,7 @@ const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascrip
 const auraSocietyCatalog = require("./data/aura-society-catalog.json");
 const verifiedAuraImageIds = new Set(auraSocietyCatalog.slice(0, 11).map(product => String(product.id)));
 const auraCatalogUrl = process.env.AURA_CATALOG_URL || "https://www.aurasociety.co/api/products?images=0";
+const auraStorefrontUrl = (process.env.AURA_STOREFRONT_URL || "https://www.aurasociety.co").replace(/\/$/, "");
 async function loadAuraCatalog() {
   try {
     const response = await fetch(auraCatalogUrl, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
@@ -566,7 +567,7 @@ app.use(async (req, res) => {
       const existing = Array.isArray(studio.inventory) ? studio.inventory : [];
       const byId = new Map(existing.map(product => [String(product.id), product]));
       const importedAt = new Date().toISOString(), catalog = await loadAuraCatalog();
-      let updated = 0;
+      let updated = 0, linked = 0;
       for (const source of catalog.products) {
         const id = String(source.id || "").slice(0, 100);
         if (!id) continue;
@@ -581,10 +582,12 @@ app.use(async (req, res) => {
           channel: "Aura Society Co.",
           description: `${String(source.brand || "Fragrance")} · ${String(source.size || "Size not listed")}. ${String(source.description || "")} Notes: ${String(source.notes || "")}`.trim().slice(0, 1200)
         };
+        const sourceCheckoutUrl = `${auraStorefrontUrl}/product.html?id=${encodeURIComponent(id)}`;
         if (byId.has(id)) {
           const current = byId.get(id);
           const factsChanged = ["name", "sku", "category", "price", "quantity", "condition", "channel", "description"].some(key => current[key] !== sourceFacts[key]);
-          const next = { ...current, ...sourceFacts, imageUrl: current.imageUrl || imageUrl, sourceSystem: "aura-society", sourceSyncedAt: importedAt, updatedAt: factsChanged ? importedAt : current.updatedAt };
+          if (!current.checkoutUrl) linked += 1;
+          const next = { ...current, ...sourceFacts, imageUrl: current.imageUrl || imageUrl, checkoutUrl: current.checkoutUrl || sourceCheckoutUrl, sourceSystem: "aura-society", sourceSyncedAt: importedAt, updatedAt: factsChanged ? importedAt : current.updatedAt };
           if (factsChanged) {
             updated += 1;
             Object.assign(next, { status: "draft", listingTitle: "", listingCopy: "", listingTags: [], socialCaption: "", pricingGuidance: "", reviewWarnings: [], listingAgent: null });
@@ -596,6 +599,7 @@ app.use(async (req, res) => {
           id,
           ...sourceFacts,
           imageUrl,
+          checkoutUrl: sourceCheckoutUrl,
           sourceSystem: "aura-society",
           sourceSyncedAt: importedAt,
           status: "draft",
@@ -614,7 +618,7 @@ app.use(async (req, res) => {
       const state = { ...workspace.state, resellerStudio: { ...studio, inventory } };
       if (supabase.configured()) await supabase.saveWorkspace(req, workspaceId, state);
       else database.saveWorkspace(workspaceId, state);
-      return sendJson(res, 200, { imported: inventory.length - existing.length, updated, total: inventory.length, source: catalog.source, syncedAt: importedAt });
+      return sendJson(res, 200, { imported: inventory.length - existing.length, updated, linked, total: inventory.length, source: catalog.source, syncedAt: importedAt });
     } catch (error) {
       return sendJson(res, error.status || 500, { error: error.message || "Aura Society catalog could not be imported" });
     }
