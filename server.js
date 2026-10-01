@@ -21,6 +21,18 @@ const receiptSecret=()=>{
 const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 const auraSocietyCatalog = require("./data/aura-society-catalog.json");
 const verifiedAuraImageIds = new Set(auraSocietyCatalog.slice(0, 11).map(product => String(product.id)));
+const auraCatalogUrl = process.env.AURA_CATALOG_URL || "https://www.aurasociety.co/api/products?images=0";
+async function loadAuraCatalog() {
+  try {
+    const response = await fetch(auraCatalogUrl, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+    const data = await response.json();
+    if (!response.ok || !Array.isArray(data.products) || !data.products.length) throw new Error("Aura Society returned no products");
+    return { products: data.products, source: "live" };
+  } catch (error) {
+    console.warn("Aura Society live catalog unavailable; using verified snapshot:", error.message);
+    return { products: auraSocietyCatalog, source: "snapshot" };
+  }
+}
 const staticFiles = new Map([
   ["/", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/welcome", ["welcome.html", fs.readFileSync(path.join(__dirname, "welcome.html"))]],
@@ -553,18 +565,13 @@ app.use(async (req, res) => {
       const studio = workspace.state?.resellerStudio || {};
       const existing = Array.isArray(studio.inventory) ? studio.inventory : [];
       const byId = new Map(existing.map(product => [String(product.id), product]));
-      const importedAt = new Date().toISOString();
-      for (const source of auraSocietyCatalog) {
+      const importedAt = new Date().toISOString(), catalog = await loadAuraCatalog();
+      let updated = 0;
+      for (const source of catalog.products) {
         const id = String(source.id || "").slice(0, 100);
         if (!id) continue;
         const imageUrl = verifiedAuraImageIds.has(id) ? `/product-images/aura/${id}.png` : "";
-        if (byId.has(id)) {
-          const current = byId.get(id);
-          if (imageUrl && !current.imageUrl) byId.set(id, { ...current, imageUrl, updatedAt: importedAt });
-          continue;
-        }
-        byId.set(id, {
-          id,
+        const sourceFacts = {
           name: String(source.name || "").trim().slice(0, 100),
           sku: id.slice(0, 40),
           category: `${String(source.brand || "Fragrance")} · ${String(source.family || "Other")}`.slice(0, 60),
@@ -572,8 +579,25 @@ app.use(async (req, res) => {
           quantity: Math.max(0, Math.floor(Number(source.stock) || 0)),
           condition: "New",
           channel: "Aura Society Co.",
+          description: `${String(source.brand || "Fragrance")} · ${String(source.size || "Size not listed")}. ${String(source.description || "")} Notes: ${String(source.notes || "")}`.trim().slice(0, 1200)
+        };
+        if (byId.has(id)) {
+          const current = byId.get(id);
+          const factsChanged = ["name", "sku", "category", "price", "quantity", "condition", "channel", "description"].some(key => current[key] !== sourceFacts[key]);
+          const next = { ...current, ...sourceFacts, imageUrl: current.imageUrl || imageUrl, sourceSystem: "aura-society", sourceSyncedAt: importedAt, updatedAt: factsChanged ? importedAt : current.updatedAt };
+          if (factsChanged) {
+            updated += 1;
+            Object.assign(next, { status: "draft", listingTitle: "", listingCopy: "", listingTags: [], socialCaption: "", pricingGuidance: "", reviewWarnings: [], listingAgent: null });
+          }
+          byId.set(id, next);
+          continue;
+        }
+        byId.set(id, {
+          id,
+          ...sourceFacts,
           imageUrl,
-          description: `${String(source.brand || "Fragrance")} · ${String(source.size || "Size not listed")}. ${String(source.description || "")} Notes: ${String(source.notes || "")}`.trim().slice(0, 1200),
+          sourceSystem: "aura-society",
+          sourceSyncedAt: importedAt,
           status: "draft",
           listingTitle: "",
           listingCopy: "",
@@ -590,7 +614,7 @@ app.use(async (req, res) => {
       const state = { ...workspace.state, resellerStudio: { ...studio, inventory } };
       if (supabase.configured()) await supabase.saveWorkspace(req, workspaceId, state);
       else database.saveWorkspace(workspaceId, state);
-      return sendJson(res, 200, { imported: inventory.length - existing.length, total: inventory.length });
+      return sendJson(res, 200, { imported: inventory.length - existing.length, updated, total: inventory.length, source: catalog.source, syncedAt: importedAt });
     } catch (error) {
       return sendJson(res, error.status || 500, { error: error.message || "Aura Society catalog could not be imported" });
     }
