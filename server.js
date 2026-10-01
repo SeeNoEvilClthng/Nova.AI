@@ -99,6 +99,13 @@ const staticFiles = new Map([
   ["/durable-missions.js", ["durable-missions.js", fs.readFileSync(path.join(__dirname, "durable-missions.js"))]],
   ["/connections.js", ["connections.js", fs.readFileSync(path.join(__dirname, "connections.js"))]]
 ]);
+const auraProductImageDirectory = path.join(__dirname, "public/product-images/aura");
+if (fs.existsSync(auraProductImageDirectory)) {
+  for (const filename of fs.readdirSync(auraProductImageDirectory)) {
+    if (!/^[a-z0-9-]+\.png$/i.test(filename)) continue;
+    staticFiles.set(`/product-images/aura/${filename}`, [filename, fs.readFileSync(path.join(auraProductImageDirectory, filename))]);
+  }
+}
 const rateBuckets = new Map();
 
 function clientIp(req) { return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim(); }
