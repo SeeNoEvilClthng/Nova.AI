@@ -674,7 +674,7 @@ app.use(async (req, res) => {
   const asset = staticFiles.get(pathname);
   if (!asset) return res.writeHead(404).end("Not found");
   const extension = path.extname(asset[0]);
-  const cacheControl = extension === ".html"
+  const cacheControl = [".html", ".js", ".css"].includes(extension)
     ? "no-cache"
     : extension === ".png"
       ? "public, max-age=86400, stale-while-revalidate=604800"
