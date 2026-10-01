@@ -127,8 +127,10 @@ async function completeInstagramOAuth(res,requestUrl){
     if(!code)throw Object.assign(new Error(requestUrl.searchParams.get("error_description")||"Instagram did not authorize this connection"),{status:400});
     const workspaceRows=await supabase.adminListWorkspaces(),workspace=workspaceRows.find(item=>item.id===state.workspaceId);
     if(!workspace)throw Object.assign(new Error("Workspace not found"),{status:404});
-    const tokenResponse=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:config.appId,client_secret:config.appSecret,grant_type:"authorization_code",redirect_uri:redirectUri,code})}),shortToken=await tokenResponse.json();
-    if(!tokenResponse.ok||!shortToken.access_token)throw new Error(shortToken?.error_message||shortToken?.error?.message||"Instagram rejected the authorization code");
+    const tokenForm=new FormData();
+    tokenForm.set("client_id",config.appId);tokenForm.set("client_secret",config.appSecret);tokenForm.set("grant_type","authorization_code");tokenForm.set("redirect_uri",redirectUri);tokenForm.set("code",code);
+    const tokenResponse=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",body:tokenForm}),tokenPayload=await tokenResponse.json(),shortToken=Array.isArray(tokenPayload?.data)?tokenPayload.data[0]:tokenPayload;
+    if(!tokenResponse.ok||!shortToken?.access_token)throw new Error(tokenPayload?.error_message||tokenPayload?.error?.message||"Instagram rejected the authorization code");
     const longResponse=await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({grant_type:"ig_exchange_token",client_secret:config.appSecret,access_token:shortToken.access_token})}`),longToken=await longResponse.json(),accessToken=longResponse.ok&&longToken.access_token?longToken.access_token:shortToken.access_token,identityResponse=await fetch(`https://graph.instagram.com/${config.graphVersion}/me?fields=user_id,username`,{headers:{Authorization:`Bearer ${accessToken}`}}),identity=await identityResponse.json();
     if(!identityResponse.ok)throw new Error(identity?.error?.message||"Instagram account details could not be verified");
     const accountId=String(identity.user_id||identity.id||shortToken.user_id||"");
