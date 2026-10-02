@@ -47,6 +47,7 @@ const staticFiles = new Map([
   ["/og-nova.png", ["og-nova.png", fs.readFileSync(path.join(__dirname, "og-nova.png"))]],
   ["/social/baccarat-rouge-540-xayresell-v3.png", ["baccarat-rouge-540-xayresell-v3.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-xayresell-v3.png"))]],
   ["/social/baccarat-rouge-540-aura-modern-v2.png", ["baccarat-rouge-540-aura-modern-v2.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-aura-modern-v2.png"))]],
+  ["/social/baccarat-rouge-540-extrait-aura-editorial-v1.png", ["baccarat-rouge-540-extrait-aura-editorial-v1.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-extrait-aura-editorial-v1.png"))]],
   ["/index.html", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/styles.css", ["styles.css", fs.readFileSync(path.join(__dirname, "styles.css"))]],
   ["/router.css", ["router.css", fs.readFileSync(path.join(__dirname, "router.css"))]],
