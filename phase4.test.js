@@ -130,3 +130,27 @@ test("subscription renewals sync as orders, and a missing permission only warns"
   const second = await engine.sync({ workspaceId: "w1", offers });
   assert.match(second.warnings[0], /Invoices: Read/);
 });
+
+test("runCycle completes and records the outcome; a crash is logged as failed", async () => {
+  const supabase = fakeSupabase();
+  const { operator } = operatorWith(supabase);
+  const done = await operator.runCycle({ workspaceId: "w1", trigger: "manual" });
+  assert.equal(done.status, "completed");
+  const finished = supabase.runs.find(row => row.id === done.runId && row.status === "completed");
+  assert.ok(finished.brief.headline && finished.metrics.evidence);
+  const broken = fakeSupabase({ adminPageMetrics: async () => { throw new Error("database offline"); } });
+  const failed = await operatorWith(broken).operator.runCycle({ workspaceId: "w1", trigger: "scheduled" });
+  assert.equal(failed.status, "failed");
+  assert.match(broken.runs.find(row => row.status === "failed").error, /database offline/);
+});
+
+test("operator routes run in the deployed server and need Supabase", async () => {
+  const app = require("./server");
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise(resolve => server.once("listening", resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/operator/runs?workspace=x`);
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error, /requires Supabase/);
+  } finally { server.close(); }
+});

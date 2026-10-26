@@ -1,4 +1,6 @@
-// Autonomous Operator: a daily operating cycle per company.
+// Autonomous Operator: a daily operating cycle per company. Runs inside the
+// main server (server.js), which is what Vercel deploys; manual cycles finish
+// in the background via waitUntil and every outcome is written to the run log.
 //   1. Sync verified revenue from the company's Stripe account.
 //   2. Collect real metrics (revenue, traffic, leads, evidence, tasks).
 //   3. A CEO agent writes a brief and recommends next actions from those
@@ -101,8 +103,28 @@ function createOperator({ supabase, router, ledger, syncRevenue, billingEnabled,
     return { allowed: true };
   }
 
-  return {
+  const api = {
     scheduledAccess,
+
+    // Runs collect -> brief -> drafts for a started run and always records
+    // the outcome, so a failure shows in the run log instead of vanishing.
+    async finishCycle(run) {
+      try {
+        const context = await api.collect({ workspaceId: run.workspaceId });
+        const briefing = await api.brief({ workspaceId: run.workspaceId, userId: run.userId, context });
+        const drafting = await api.draftInternalWork({ workspaceId: run.workspaceId, userId: run.userId, mode: run.mode, context, brief: briefing.brief });
+        await api.finish({ runId: run.runId, values: { status: "completed", metrics: context.metrics, brief: { ...briefing.brief, warnings: [...context.warnings, ...briefing.warnings] }, drafts: drafting.drafts, model: briefing.model, tokens: briefing.tokens + drafting.tokens } });
+        return { runId: run.runId, status: "completed" };
+      } catch (error) {
+        await api.finish({ runId: run.runId, values: { status: "failed", error: String(error?.message || error).slice(0, 300) } }).catch(() => {});
+        return { runId: run.runId, status: "failed" };
+      }
+    },
+
+    async runCycle({ workspaceId, trigger }) {
+      const run = await api.startRun({ workspaceId, trigger });
+      return run.skip ? { runId: run.runId, status: "skipped", reason: run.skip } : api.finishCycle(run);
+    },
 
     // Creates the run record. Returns skip=true when the daily cap is spent.
     async startRun({ workspaceId, trigger }) {
@@ -160,6 +182,7 @@ function createOperator({ supabase, router, ledger, syncRevenue, billingEnabled,
       return true;
     }
   };
+  return api;
 }
 
 module.exports = { createOperator, normalizeSettings, buildMetrics, templateBrief, enforceActionSafety, briefSchema, MODES };

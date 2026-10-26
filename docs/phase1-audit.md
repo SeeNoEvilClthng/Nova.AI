@@ -131,7 +131,7 @@ The first complete idea-to-revenue path. A founder drafts an offer (optionally w
 
 ## Phase 3 (2026-10-29): Autonomous Operator
 
-A daily operating cycle per company, run as a durable workflow outside the request path:
+A daily operating cycle per company:
 1. Sync verified revenue.
 2. Collect real metrics (revenue, traffic, signups, new leads, interviews, live offers, open/blocked tasks).
 3. A CEO agent writes a brief with 3–5 recommended actions.
@@ -143,14 +143,16 @@ The cycle never publishes, messages anyone, spends money or changes prices. Exte
 |---|---|
 | `operator.js` (new) | Mode settings (Copilot / Supervised / Autopilot, pause, daily token cap of 5k–200k), metric builder, a rule-based brief when no model is configured, action-safety enforcement, Autopilot drafting, and checks before a scheduled run (pause, active plan, AI budget). |
 | `operator-runtime.js` (new) | Wires the operator to Supabase, the router, the usage ledger and revenue sync. |
-| `workflows/nova-operator.ts` (new) | Durable steps: start → collect → brief → draft → finish. A run that fails is recorded as failed. |
-| `src/index.ts` | `POST /api/operator/settings`, `GET /api/operator/runs`, `POST /api/operator/run` (manual; same entitlement and budget checks as other AI routes). The existing daily cron also starts one cycle per eligible company (Supervised or Autopilot, not paused, no run in the last 20 h). |
-| `server.js` | `operatingMode` is server-owned: browser saves can't change the mode, pause or cap. Serves the new panel files. |
+| `operator-routes.js` (new) | `POST /api/operator/settings`, `GET /api/operator/runs`, `POST /api/operator/run`. Manual runs have the same entitlement and budget checks as other AI routes; they reply immediately and keep running in the background through Vercel's `waitUntil`. The existing daily cron runs eligible companies (Supervised or Autopilot, not paused, no run in the last 20 h) oldest first, within a 200 s time budget; any it doesn't reach run the next day. Every outcome, including failures, is written to the run log. |
+| `server.js` | Mounts the operator routes and the scheduled cycles. `operatingMode` is server-owned: browser saves can't change the mode, pause or cap. Serves the new panel files. |
+| `package.json` | `@vercel/functions` pinned to 3.9.3, the version already in the lockfile. |
 | `supabase.js` | Server-side metric reads, token-use queries and the operator run log. |
 | `founder-stripe.js`, `revenue-engine.js` | Subscription renewal invoices sync as orders (the first invoice is excluded so it isn't double counted). |
 | `operator-panel.js`, `operator.css`, `index.html` | Autopilot screen: mode picker, token cap, Pause/Resume, Run cycle now, latest brief with a real-metrics strip, risks, actions tagged Internal or Needs your approval (each can be handed to the AI team), Autopilot drafts, and a history/audit table. |
 | `supabase/migrations/20261029_operator_runs.sql` | `nova_operator_runs`: owners can read; only the server can write. |
-| `phase4.test.js` | 9 new tests (62 total). |
+| `phase4.test.js` | 11 new tests (64 total). |
+
+**Production finding (pre-existing):** `vercel.json` deploys `server.js` directly, so **nothing in `src/index.ts` runs on Vercel**. That covers durable missions, tool connections and the Meta/X publish routes there; on the live site they all return 404, and that was already true before these changes. The operator was first built on Workflow DevKit inside `src/index.ts` and was moved into `server.js` because of this. Fixing durable missions means either deploying the Nitro build (changing `vercel.json`, which needs a preview check) or moving those routes into `server.js` too.
 
 **Needs configuration:** run `20261029_operator_runs.sql`. Scheduled cycles use the existing daily cron and `CRON_SECRET`.
 
