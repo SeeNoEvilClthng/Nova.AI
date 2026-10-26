@@ -448,3 +448,12 @@ grant select, insert, update, delete on public.nova_email_sends to service_role;
 drop policy if exists "Owners can read Nova email sends" on public.nova_email_sends;
 create policy "Owners can read Nova email sends" on public.nova_email_sends for select to authenticated
   using (exists (select 1 from public.nova_workspaces w where w.id = workspace_id and w.user_id = (select auth.uid())));
+
+-- Instant revenue updates: the webhook Nova registers in each founder's own
+-- Stripe account, with its signing secret encrypted by the Nova server
+-- (AES-256-GCM). The table stays server-only. Safe to run more than once.
+alter table public.nova_payment_connections
+  add column if not exists webhook_endpoint_id text,
+  add column if not exists webhook_secret_enc text,
+  add column if not exists webhook_iv text,
+  add column if not exists webhook_tag text;

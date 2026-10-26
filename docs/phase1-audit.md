@@ -222,9 +222,28 @@ The re-release removes the first two and guards the third. If it fails again, th
 1. Run `20261031_growth.sql`.
 2. To send from Nova, create a Resend account, verify a sending domain, and set `RESEND_API_KEY` and `NOVA_EMAIL_FROM` (for example `Acme <hello@yourdomain.com>`). Without them, drafting and Copy still work.
 
+## Phase 6 (2026-11-01): instant revenue updates
+
+When a founder connects Stripe, or presses **Turn on instant updates**, Nova registers a webhook in the founder's own Stripe account. It listens for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` and `invoice.paid`.
+- The endpoint's signing secret is unique to that company and stored AES-256-GCM encrypted.
+- Incoming events are verified against it, with a 5-minute replay window.
+- A verified event triggers the existing idempotent sync in the background, rather than trusting the event body, so duplicate or out-of-order events can't corrupt the ledger.
+- Bursts are capped at 120 syncs per hour per company; the daily sync catches up anything beyond that.
+- Disconnecting removes the webhook from the founder's account, or tells the founder to delete it if Stripe refuses.
+
+This needs the optional **Webhook Endpoints: Write** permission on the restricted key. Without it, or before the migration runs, the company stays on daily and manual sync, with an explanation.
+
+| File | Change |
+|---|---|
+| `founder-stripe.js` | `createWebhook`, `deleteWebhook`, `verifyStripeSignature` (per-company secret), event list. |
+| `revenue-engine.js` | `enableInstantUpdates`, `handleWebhook`, webhook clean-up on disconnect, `instantUpdates` in status. |
+| `revenue-routes.js` | Auto-enables on connect; `POST /api/revenue/stripe/webhook`; public `POST /api/stripe/founder-webhook/<workspaceId>`. |
+| `revenue.js`, `index.html` | Instant-updates status and button; updated permission list; fixed the "company?s" typo on the live Revenue screen. |
+| `supabase/migrations/20261101_instant_revenue.sql` | Webhook columns on `nova_payment_connections` (server-only). |
+| `phase7.test.js` | 5 new tests (86 total). |
+
 ## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
-Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5).
-1. **Webhook-driven revenue.** Stripe webhooks from each founder's account for instant order and refund updates; currently orders sync daily and on the Sync button.
+Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5); instant revenue updates (Phase 6).
 2. **Execute approved actions.** Let approved operator and mission actions call connected tools (Instagram publishing, lead follow-up, offer changes), with per-action permission, evidence and verification.
 3. **Port the remaining unreachable routes** (GitHub verify, X/Meta publishing) from `src/index.ts` into `server.js`, then remove `src/index.ts` behind a preview check.
 4. **A/B testing** of launch-page headlines with sample-size-aware results.

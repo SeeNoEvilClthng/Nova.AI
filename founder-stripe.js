@@ -9,6 +9,21 @@ const REQUIRED_PERMISSIONS = [
   ["Products", "Write"], ["Prices", "Write"], ["Payment Links", "Write"],
   ["Checkout Sessions", "Read"], ["PaymentIntents", "Read"], ["Charges", "Read"], ["Invoices", "Read"]
 ];
+// Optional: lets Nova register a webhook for instant updates.
+const OPTIONAL_PERMISSIONS = [["Webhook Endpoints", "Write"]];
+const WEBHOOK_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded", "charge.refunded", "invoice.paid"];
+
+// Stripe-Signature check (t=timestamp,v1=HMAC) against one company's own
+// endpoint secret. Rejects anything older than five minutes (replays).
+function verifyStripeSignature(rawBody, header, secret, now = Date.now()) {
+  const parts = String(header || "").split(",").reduce((out, item) => { const [key, value] = item.split("="); if (key && value) (out[key] ||= []).push(value); return out; }, {});
+  const timestamp = Number(parts.t?.[0]);
+  if (!timestamp || Math.abs(now / 1000 - timestamp) > 300) throw Object.assign(new Error("Expired or missing Stripe signature"), { status: 400 });
+  const expected = require("node:crypto").createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const valid = (parts.v1 || []).some(value => value.length === expected.length && require("node:crypto").timingSafeEqual(Buffer.from(value), Buffer.from(expected)));
+  if (!valid) throw Object.assign(new Error("Invalid Stripe signature"), { status: 400 });
+  return JSON.parse(rawBody);
+}
 
 function keyMode(apiKey) {
   const key = String(apiKey || "").trim();
@@ -94,6 +109,19 @@ function createFounderStripe({ fetchImpl = fetch } = {}) {
       return sessions;
     },
 
+    // Registers a webhook in the founder's account so Stripe tells Nova about
+    // payments, refunds and renewals as they happen. Needs the optional
+    // "Webhook Endpoints: Write" permission; without it, polling continues.
+    async createWebhook(apiKey, { url, workspaceId }) {
+      const endpoint = await call(apiKey, "POST", "/webhook_endpoints", { url, enabled_events: WEBHOOK_EVENTS, description: "Nova.Ai verified revenue sync", metadata: { nova_workspace_id: workspaceId } });
+      if (!endpoint.id || !endpoint.secret) throw Object.assign(new Error("Stripe did not return a webhook signing secret"), { status: 502 });
+      return { id: endpoint.id, secret: endpoint.secret };
+    },
+
+    async deleteWebhook(apiKey, endpointId) {
+      return call(apiKey, "DELETE", `/webhook_endpoints/${encodeURIComponent(endpointId)}`);
+    },
+
     // Paid renewal invoices for a subscription started through a payment
     // link. The first invoice is the checkout payment itself, already counted
     // from the session, so it is excluded.
@@ -134,4 +162,4 @@ function orderFromSession(session, { workspaceId, offerId, mode }) {
   };
 }
 
-module.exports = { createFounderStripe, orderFromSession, orderFromInvoice, keyMode, encodeForm, safeCheckoutUrl, REQUIRED_PERMISSIONS };
+module.exports = { verifyStripeSignature, WEBHOOK_EVENTS, OPTIONAL_PERMISSIONS, createFounderStripe, orderFromSession, orderFromInvoice, keyMode, encodeForm, safeCheckoutUrl, REQUIRED_PERMISSIONS };

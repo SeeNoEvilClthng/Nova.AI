@@ -8,7 +8,7 @@ const billing = require("./billing");
 const { preserveUsage } = require("./ai-budget");
 const { usageLedger, accountEntitlement, enforceAiBudget } = require("./ai-access");
 const entitlements = require("./entitlements");
-const { handleRevenue, syncAllRevenue } = require("./revenue-routes");
+const { handleRevenue, handleFounderWebhook, syncAllRevenue } = require("./revenue-routes");
 const { handleOperator, runScheduledCycles } = require("./operator-routes");
 // Feature modules that load behind a guard: if one fails to load in an
 // environment, its routes are unavailable but the rest of the site keeps
@@ -411,6 +411,7 @@ app.use(async (req, res) => {
   const pathname = new URL(publicUrl, `http://${req.headers.host}`).pathname;
   const requestUrl = new URL(publicUrl, `http://${req.headers.host}`);
   if (pathname === "/api/health" && req.method === "GET") return sendJson(res, 200, { status:startupErrors.length?"degraded":"ok", service:"Nova.Ai", storage:supabase.configured()?"supabase":"sqlite", ...(startupErrors.length?{unavailable:startupErrors}:{}) });
+  if (await handleFounderWebhook({ req, res, pathname, sendJson, readRawBody, rateLimited })) return;
   if (await handleRevenue({ req, res, pathname, requestUrl, sendJson, readBody, rateLimited })) return;
   if (await handleOperator({ req, res, pathname, requestUrl, sendJson, readBody })) return;
   if (missionRoutes && await missionRoutes.handleMissions({ req, res, pathname, requestUrl, sendJson, readBody })) return;

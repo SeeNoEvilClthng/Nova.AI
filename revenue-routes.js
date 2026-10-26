@@ -4,18 +4,31 @@
 const supabase = require("./supabase");
 const router = require("./router");
 const secretBox = require("./secret-box");
-const { createFounderStripe, REQUIRED_PERMISSIONS } = require("./founder-stripe");
+const { createFounderStripe, REQUIRED_PERMISSIONS, OPTIONAL_PERMISSIONS } = require("./founder-stripe");
 const { createRevenueEngine, summarize } = require("./revenue-engine");
 const { assertCanGenerate, usageLedger } = require("./ai-access");
+const { runInBackground } = require("./background");
 
 const store = {
   getConnection: supabase.getPaymentConnection,
   saveConnection: supabase.savePaymentConnection,
   deleteConnection: supabase.deletePaymentConnection,
   upsertOrders: supabase.upsertOrders,
-  markSynced: supabase.markPaymentSynced
+  markSynced: supabase.markPaymentSynced,
+  saveWebhook: supabase.savePaymentWebhook
 };
 const engine = createRevenueEngine({ store, stripe: createFounderStripe(), secretBox });
+const webhookUrl = workspaceId => { const base = String(process.env.APP_URL || "").replace(/\/$/, ""); return base ? `${base}/api/stripe/founder-webhook/${encodeURIComponent(workspaceId)}` : ""; };
+
+// Tries to switch on instant updates; a missing permission or an unapplied
+// migration leaves the company on daily/manual sync with an explanation.
+async function tryEnableInstantUpdates(workspaceId) {
+  try { return await engine.enableInstantUpdates({ workspaceId, webhookUrl: webhookUrl(workspaceId) }); }
+  catch (error) {
+    const reason = error.status === 403 ? "Add the Webhook Endpoints: Write permission to the restricted key to get instant updates." : error.status === 400 && /column|PGRST204/i.test(error.message) ? "Run the instant-updates SQL update in Supabase first." : String(error.message || "Instant updates could not be enabled").slice(0, 200);
+    return { instantUpdates: false, reason };
+  }
+}
 
 const OFFER_TYPES = ["service", "product", "membership", "digital"], CURRENCIES = ["USD", "CAD", "GBP", "EUR"], BILLING = ["one_time", "monthly", "yearly"];
 const offerSchema = {
@@ -62,11 +75,16 @@ async function handleRevenue({ req, res, pathname, requestUrl, sendJson, readBod
     if (!workspace) return sendJson(res, 404, { error: "Workspace not found" }), true;
     const saveOffers = offers => supabase.saveWorkspace(req, workspace.id, { ...(workspace.state || {}), offers });
 
-    if (pathname === "/api/revenue/status" && req.method === "GET") return sendJson(res, 200, { ...(await engine.status(workspace.id)), requiredPermissions: REQUIRED_PERMISSIONS.map(([name, level]) => `${name}: ${level}`) }), true;
+    if (pathname === "/api/revenue/status" && req.method === "GET") return sendJson(res, 200, { ...(await engine.status(workspace.id)), requiredPermissions: REQUIRED_PERMISSIONS.map(([name, level]) => `${name}: ${level}`), optionalPermissions: OPTIONAL_PERMISSIONS.map(([name, level]) => `${name}: ${level}`) }), true;
 
     if (pathname === "/api/revenue/stripe/connect" && req.method === "POST") {
       if (await rateLimited(req, "stripe-connect", 10)) return sendJson(res, 429, { error: "Too many connection attempts. Try again later." }), true;
-      return sendJson(res, 200, await engine.connect({ workspaceId: workspace.id, userId: user.id, apiKey: input.apiKey, confirmOwnership: input.confirmOwnership })), true;
+      const connected = await engine.connect({ workspaceId: workspace.id, userId: user.id, apiKey: input.apiKey, confirmOwnership: input.confirmOwnership });
+      return sendJson(res, 200, { ...connected, ...(await tryEnableInstantUpdates(workspace.id)) }), true;
+    }
+    if (pathname === "/api/revenue/stripe/webhook" && req.method === "POST") {
+      const result = await tryEnableInstantUpdates(workspace.id);
+      return sendJson(res, result.instantUpdates ? 200 : 409, result.instantUpdates ? result : { error: result.reason }), true;
     }
     if (pathname === "/api/revenue/stripe/disconnect" && req.method === "POST") return sendJson(res, 200, await engine.disconnect(workspace.id)), true;
 
@@ -128,4 +146,22 @@ async function syncAllRevenue() {
   return results;
 }
 
-module.exports = { handleRevenue, syncAllRevenue, syncWorkspaceRevenue, cleanOffer, templateOffer, offerSchema };
+// Public endpoint Stripe calls in each founder's account. The signature is
+// checked against that company's own secret before anything happens; a
+// verified event triggers a background sync and Stripe gets 200 at once.
+async function handleFounderWebhook({ req, res, pathname, sendJson, readRawBody, rateLimited }) {
+  const match = pathname.match(/^\/api\/stripe\/founder-webhook\/([0-9a-f-]{36})$/i);
+  if (!match || req.method !== "POST") return false;
+  try {
+    if (!supabase.configured() || !supabase.hasSecret()) return sendJson(res, 503, { error: "Not configured" }), true;
+    const workspaceId = match[1], rawBody = await readRawBody(req);
+    const { event, relevant } = await engine.handleWebhook({ workspaceId, rawBody, signature: req.headers["stripe-signature"] });
+    // Bursts of events collapse: past the limit, the daily sync catches up.
+    if (relevant && !(await rateLimited(req, `founder-webhook-${workspaceId}`, 120, 3_600_000, workspaceId))) runInBackground(syncWorkspaceRevenue(workspaceId), "Stripe webhook sync");
+    return sendJson(res, 200, { received: true, type: event.type }), true;
+  } catch (error) {
+    return sendJson(res, error.status || 400, { error: error.status === 404 ? "Unknown endpoint" : "Webhook rejected" }), true;
+  }
+}
+
+module.exports = { handleRevenue, handleFounderWebhook, syncAllRevenue, syncWorkspaceRevenue, cleanOffer, templateOffer, offerSchema };

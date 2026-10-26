@@ -2,7 +2,7 @@
 // offers into live checkout links, and syncs paid orders into a verified
 // revenue ledger. Revenue figures come only from payments Stripe reports;
 // nothing the browser saves can create or change an order.
-const { orderFromSession, orderFromInvoice, safeCheckoutUrl } = require("./founder-stripe");
+const { orderFromSession, orderFromInvoice, safeCheckoutUrl, verifyStripeSignature, WEBHOOK_EVENTS } = require("./founder-stripe");
 
 function httpError(message, status) { return Object.assign(new Error(message), { status }); }
 
@@ -43,7 +43,30 @@ function createRevenueEngine({ store, stripe, secretBox }) {
   return {
     async status(workspaceId) {
       const connection = await store.getConnection(workspaceId);
-      return { connected: Boolean(connection), mode: connection?.mode || null, connectedAt: connection?.created_at || null, lastSyncedAt: connection?.last_synced_at || null, encryptionReady: secretBox.ready() };
+      return { connected: Boolean(connection), mode: connection?.mode || null, connectedAt: connection?.created_at || null, lastSyncedAt: connection?.last_synced_at || null, instantUpdates: Boolean(connection?.webhook_endpoint_id), encryptionReady: secretBox.ready() };
+    },
+
+    // Registers a webhook in the founder's Stripe account; its signing secret
+    // is stored encrypted and is unique to this company.
+    async enableInstantUpdates({ workspaceId, webhookUrl }) {
+      if (!/^https:\/\//.test(String(webhookUrl || ""))) throw httpError("Instant updates need the app's public HTTPS address (APP_URL)", 503);
+      const { apiKey, connection } = await apiKeyFor(workspaceId);
+      if (connection.webhook_endpoint_id) return { instantUpdates: true, alreadyEnabled: true };
+      const endpoint = await stripe.createWebhook(apiKey, { url: webhookUrl, workspaceId });
+      const sealed = secretBox.seal(endpoint.secret);
+      await store.saveWebhook(workspaceId, { webhook_endpoint_id: endpoint.id, webhook_secret_enc: sealed.ciphertext, webhook_iv: sealed.iv, webhook_tag: sealed.tag });
+      return { instantUpdates: true };
+    },
+
+    // Verifies the event with this company's own secret before doing anything.
+    // Relevant events trigger a full idempotent sync rather than trusting the
+    // event body, so ordering and duplicates can't corrupt the ledger.
+    async handleWebhook({ workspaceId, rawBody, signature }) {
+      const connection = await store.getConnection(workspaceId);
+      if (!connection?.webhook_secret_enc) throw httpError("Instant updates are not enabled for this company", 404);
+      const secret = secretBox.open({ ciphertext: connection.webhook_secret_enc, iv: connection.webhook_iv, tag: connection.webhook_tag });
+      const event = verifyStripeSignature(rawBody, signature, secret);
+      return { event: { id: event.id, type: event.type }, relevant: WEBHOOK_EVENTS.includes(event.type) };
     },
 
     async connect({ workspaceId, userId, apiKey, confirmOwnership }) {
@@ -56,8 +79,14 @@ function createRevenueEngine({ store, stripe, secretBox }) {
     },
 
     async disconnect(workspaceId) {
+      // Best effort: remove Nova's webhook from the founder's account too.
+      const connection = await store.getConnection(workspaceId);
+      let webhookRemoved = !connection?.webhook_endpoint_id;
+      if (connection?.webhook_endpoint_id) {
+        try { const apiKey = secretBox.open({ ciphertext: connection.encrypted_key, iv: connection.key_iv, tag: connection.key_tag }); await stripe.deleteWebhook(apiKey, connection.webhook_endpoint_id); webhookRemoved = true; } catch { /* reported below */ }
+      }
       await store.deleteConnection(workspaceId);
-      return { connected: false };
+      return { connected: false, webhookRemoved };
     },
 
     // Creating a public checkout link is an external, customer-facing action,
