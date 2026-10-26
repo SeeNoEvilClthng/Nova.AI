@@ -83,12 +83,17 @@ test("workforce runs are labelled as drafts, not completed work", async () => {
   assert.ok(run.employees.every(employee => employee.status === "drafted"));
 });
 
-test("mission stages return labelled templates without a model", async () => {
-  const workspace = database.createWorkspace("Mission test");
-  const input = { missionId: "mission-1", workspaceId: workspace.id, company: "Acme", objective: "Book five paid pilot customers this month" };
+test("mission stages return labelled templates without a model and save progress", async () => {
+  const workspace = database.createWorkspace("Mission test"), missionId = "mission-1";
+  database.saveWorkspace(workspace.id, { durableMissions: [{ id: missionId, status: "running" }] });
+  const input = { missionId, workspaceId: workspace.id, company: "Acme", objective: "Book five paid pilot customers this month" };
   const strategy = await missionAgents.runMissionStage("strategy", input);
   assert.equal(strategy.status, "template");
   assert.match(strategy.output, /^Template/);
   const research = await missionAgents.runMissionStage("research", input, [strategy]);
-  assert.equal(research.agent, "Research");
+  await missionAgents.saveMissionProgress(input, [strategy, research], "awaiting_approval");
+  const saved = database.getWorkspace(workspace.id).state.durableMissions[0];
+  assert.equal(saved.stage, "awaiting_approval");
+  assert.deepEqual(saved.steps.map(step => step.agent), ["Strategy", "Research"]);
+  await assert.rejects(missionAgents.saveMissionProgress({ ...input, missionId: "missing" }, [], "awaiting_approval"));
 });

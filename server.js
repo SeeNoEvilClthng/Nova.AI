@@ -10,7 +10,6 @@ const { usageLedger, accountEntitlement, enforceAiBudget } = require("./ai-acces
 const entitlements = require("./entitlements");
 const { handleRevenue, syncAllRevenue } = require("./revenue-routes");
 const { handleOperator, runScheduledCycles } = require("./operator-routes");
-const { handleMissions, resumeStalledMissions } = require("./mission-routes");
 const { mergeOfferCheckouts, publicOffers } = require("./revenue-engine");
 const execution = require("./execution-core");
 const toolPermissions = require("./tool-permissions");
@@ -400,7 +399,6 @@ app.use(async (req, res) => {
   if (pathname === "/api/health" && req.method === "GET") return sendJson(res, 200, { status:"ok", service:"Nova.Ai", storage:supabase.configured()?"supabase":"sqlite" });
   if (await handleRevenue({ req, res, pathname, requestUrl, sendJson, readBody, rateLimited })) return;
   if (await handleOperator({ req, res, pathname, requestUrl, sendJson, readBody })) return;
-  if (await handleMissions({ req, res, pathname, requestUrl, sendJson, readBody })) return;
   if (pathname.startsWith("/p/") && req.method === "GET") {
     try {
       const page=await supabase.getPublishedPage(decodeURIComponent(pathname.slice(3)));
@@ -575,8 +573,8 @@ app.use(async (req, res) => {
       if(!process.env.CRON_SECRET||String(req.headers.authorization||"")!==`Bearer ${process.env.CRON_SECRET}`)return sendJson(res,401,{error:"Unauthorized"});
       const now=new Date(),workspaces=await supabase.adminListAutomatedWorkspaces(),results=[];
       for(const workspace of workspaces){const studio=workspace.state?.resellerStudio||{},automation=studio.campaignAutomation||{};if(!automation.enabled||!automation.nextRunAt||new Date(automation.nextRunAt)>now)continue;const inventory=Array.isArray(studio.inventory)?studio.inventory.filter(product=>product.status!=="draft"&&Number(product.quantity)>0):[];if(!inventory.length){results.push({workspaceId:workspace.id,status:"skipped",reason:"No prepared products"});continue}const sequence=Number(automation.sequence||0),product=inventory[sequence%inventory.length],campaign=scheduledCampaign(product,sequence),nextAutomation={...automation,approvalRequired:true,lastPreparedAt:now.toISOString(),nextRunAt:nextCampaignRun(now),sequence:sequence+1};const state={...(workspace.state||{}),resellerStudio:{...studio,contentCampaigns:[campaign,...(studio.contentCampaigns||[])].slice(0,50),campaignAutomation:nextAutomation}};await supabase.adminSaveWorkspace(workspace.id,state);results.push({workspaceId:workspace.id,status:"prepared",campaignId:campaign.id,productId:product.id})}
-      const revenue=await syncAllRevenue(),missions=await resumeStalledMissions(),operator=await runScheduledCycles();
-      return sendJson(res,200,{ok:true,checked:workspaces.length,results,revenue,missions,operator});
+      const revenue=await syncAllRevenue(),operator=await runScheduledCycles();
+      return sendJson(res,200,{ok:true,checked:workspaces.length,results,revenue,operator});
     }catch(error){return sendJson(res,error.status||500,{error:error.message||"Scheduled campaigns could not be prepared"});}
   }
   if (pathname === "/api/reseller/social/status" && req.method === "GET") {

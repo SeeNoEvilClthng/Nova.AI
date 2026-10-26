@@ -257,32 +257,6 @@ async function updateLead(req, id, status) {
 
 const hasSecret = () => Boolean(secretKey());
 
-// Durable missions. Founders read their own through RLS; the server writes.
-const MISSION_FIELDS = "id,workspace_id,user_id,company,objective,status,resume_status,steps,decision,error,attempts,locked_until,created_at,updated_at";
-async function insertMission(row) {
-  const rows = await adminRequest("/rest/v1/nova_missions", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
-  return rows[0];
-}
-async function listMissions(req, workspaceId) {
-  return request(`/rest/v1/nova_missions?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=${MISSION_FIELDS}&order=created_at.desc&limit=30`, req);
-}
-async function getMission(req, workspaceId, id) {
-  const rows = await request(`/rest/v1/nova_missions?id=eq.${encodeURIComponent(id)}&workspace_id=eq.${encodeURIComponent(workspaceId)}&select=${MISSION_FIELDS}&limit=1`, req);
-  return rows[0] || null;
-}
-// Takes the lease only if nobody holds a live one; returns null otherwise.
-async function claimMission(id, leaseMs) {
-  const now = new Date().toISOString(), until = new Date(Date.now() + leaseMs).toISOString();
-  const rows = await adminRequest(`/rest/v1/nova_missions?id=eq.${encodeURIComponent(id)}&or=(locked_until.is.null,locked_until.lt.${encodeURIComponent(now)})&select=${MISSION_FIELDS}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ locked_until: until }) });
-  return rows[0] || null;
-}
-async function updateMission(id, values) {
-  return adminRequest(`/rest/v1/nova_missions?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(values) });
-}
-async function adminListActiveMissions() {
-  return adminRequest(`/rest/v1/nova_missions?status=in.(running,executing)&select=${MISSION_FIELDS}&order=updated_at.asc&limit=50`);
-}
-
 // Autonomous operator storage and server-side reads used by scheduled cycles,
 // which run without a signed-in user.
 async function adminCount(path) {
@@ -385,4 +359,4 @@ async function countPageViews(req, workspaceId) {
   return page ? countRows(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(page.id)}&event_type=eq.view&select=id`, req) : 0;
 }
 
-module.exports = { insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
+module.exports = { adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
