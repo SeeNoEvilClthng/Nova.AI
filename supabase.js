@@ -165,7 +165,7 @@ async function publicRequest(path, options = {}) {
 }
 
 async function getPublishedPage(slug) {
-  const rows = await publicRequest(`/rest/v1/nova_published_pages?slug=eq.${encodeURIComponent(slug)}&published=eq.true&select=id,slug,title,snapshot,published_at&limit=1`);
+  const rows = await publicRequest(`/rest/v1/nova_published_pages?slug=eq.${encodeURIComponent(slug)}&published=eq.true&select=id,workspace_id,slug,title,snapshot,published_at&limit=1`);
   return rows[0] || null;
 }
 
@@ -257,4 +257,40 @@ async function updateLead(req, id, status) {
 
 const hasSecret = () => Boolean(secretKey());
 
-module.exports = { configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
+// Revenue Engine storage. Payment credentials and orders are written only with
+// the server secret; owners can read their own orders through RLS.
+async function getPaymentConnection(workspaceId) {
+  const rows = await adminRequest(`/rest/v1/nova_payment_connections?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=*&limit=1`);
+  return rows[0] || null;
+}
+
+async function savePaymentConnection(row) {
+  return adminRequest("/rest/v1/nova_payment_connections?on_conflict=workspace_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ ...row, last_synced_at: null, updated_at: new Date().toISOString() }) });
+}
+
+async function deletePaymentConnection(workspaceId) {
+  return adminRequest(`/rest/v1/nova_payment_connections?workspace_id=eq.${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
+}
+
+async function markPaymentSynced(workspaceId, at) {
+  return adminRequest(`/rest/v1/nova_payment_connections?workspace_id=eq.${encodeURIComponent(workspaceId)}`, { method: "PATCH", body: JSON.stringify({ last_synced_at: at, updated_at: at }) });
+}
+
+async function listPaymentConnections() {
+  return adminRequest("/rest/v1/nova_payment_connections?select=workspace_id&order=last_synced_at.asc.nullsfirst&limit=200");
+}
+
+async function upsertOrders(rows) {
+  return adminRequest("/rest/v1/nova_orders?on_conflict=provider,external_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(rows.map(row => ({ ...row, synced_at: new Date().toISOString() }))) });
+}
+
+async function listOrders(req, workspaceId) {
+  return request(`/rest/v1/nova_orders?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,external_id,offer_id,mode,status,amount_minor,refunded_minor,currency,customer_email,paid_at&order=paid_at.desc&limit=500`, req);
+}
+
+async function countPageViews(req, workspaceId) {
+  const page = await getOwnerPage(req, workspaceId);
+  return page ? countRows(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(page.id)}&event_type=eq.view&select=id`, req) : 0;
+}
+
+module.exports = { getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };

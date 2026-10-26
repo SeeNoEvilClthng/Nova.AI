@@ -103,8 +103,34 @@ Fixes findings 10 and 11, plus front-end request count.
 
 **Order matters when deploying 1b:** deploy the code first, then run `20261027_rate_limits_and_visitor_writes.sql`. Old code inserts visitor rows with the anonymous key, so it would stop recording signups if the migration ran first. Before the migration runs, the new code falls back to per-instance limits; visitor writes already use the service role, so they keep working. Published pages need `SUPABASE_SECRET_KEY` from this release on. To roll back the database after a code rollback, re-create the two anon insert policies and grants from the original `schema.sql`.
 
+## Phase 2 (2026-10-28): Revenue Engine and model routing
+
+The first complete idea-to-revenue path. A founder drafts an offer (optionally with AI), connects the company's own Stripe account, takes the offer live, and customers buy from the published launch page. Revenue counts only payments read back from Stripe.
+
+| File | Change |
+|---|---|
+| `founder-stripe.js` (new) | Stripe client for the founder's own account. Accepts **restricted keys only** (`rk_test_`/`rk_live_`); full secret keys are rejected. Creates product → price (one-time or recurring) → Payment Link, with idempotency keys. Pauses or resumes links, and pages through paid Checkout Sessions including refunds. |
+| `revenue-engine.js` (new) | Connect/disconnect, take an offer live (explicit confirmation on every call), pause/resume, sync (upserts by Stripe session ID, so it never double counts), the summary (gross, refunds, net, conversion), and a helper that keeps checkout details when the browser saves the workspace. |
+| `revenue-routes.js` (new) | `/api/revenue/*`: status, connect, disconnect, offers/checkout, offers/active, sync, summary and **offers/draft** (AI Offer Strategist with unit-economics estimates and risks). Every route requires sign-in and workspace ownership. |
+| `secret-box.js` (new) | AES-256-GCM for stored credentials. Uses `NOVA_ENCRYPTION_KEY`, or the existing `SOCIAL_TOKEN_ENCRYPTION_KEY`. |
+| `server.js` | Published pages show live offers with Stripe "Buy now" buttons (Stripe-hosted URLs only) and a thank-you banner after payment. `PUT /api/state` keeps checkout details. The daily cron also syncs revenue for every connected company. |
+| `router.js` | Model routing: a `fast` tier for listings and captions, a `reasoning` tier for everything else. Configured with `AI_GATEWAY_FAST_MODEL`/`AI_GATEWAY_REASONING_MODEL` (or the `OPENAI_*` equivalents); unset tiers fall back to the single model. |
+| `revenue.js`, `revenue.css`, `index.html` | The Revenue screen uses real data: Stripe connect form, "Draft with AI", Go live / Copy link / Pause, Sync, an order ledger with refunds and TEST badges, and a 5-step readiness checklist. Browser-saved `state.orders` is no longer used. |
+| `supabase/migrations/20261028_revenue_engine.sql` | `nova_payment_connections` (server-only) and `nova_orders` (owners can read; only the server can write). |
+| `phase3.test.js` | 12 new tests (53 total). |
+
+**Needs configuration:**
+1. Run `20261028_revenue_engine.sql`.
+2. Make sure `NOVA_ENCRYPTION_KEY` (or `SOCIAL_TOKEN_ENCRYPTION_KEY`) is set to 64 hex characters, and `SUPABASE_SECRET_KEY` and `APP_URL` are set.
+3. Optionally set `AI_GATEWAY_FAST_MODEL` and `AI_GATEWAY_REASONING_MODEL`.
+
+**Not yet covered:**
+- Subscription renewals: only the first payment is synced. Next step: sync paid invoices.
+- Sync is pull-based (daily, plus the Sync button), not webhook-driven.
+- Nothing has been tested against a real Stripe account.
+
 ## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
-1. ~~(A) Shared rate limiting and anonymous-write lockdown~~ and ~~(A) Bundle the front-end~~: done in 1b.
+1. ~~(A) Shared rate limiting and anonymous-write lockdown~~ and ~~(A) Bundle the front-end~~: done in 1b. ~~(B) Model routing~~ and ~~(C) Business-to-revenue path~~: done in Phase 2 (see above for gaps).
 2. **(A) Minify the bundles** (whitespace and syntax only, since the classic scripts share globals) and move images to the Vercel CDN `public/` path.
 3. **(B) Move missions and tasks out of the JSONB blob** into `nova_missions`/`nova_tasks` tables with explicit states (planned → queued → executing → awaiting_approval → blocked/failed → verified), idempotency keys and a dead-letter view. Run workforce generation as a durable workflow and stream progress to the UI.
 4. **(B) Model routing.** Use a cheap model for listings and captions, and a reasoning model for strategy and review, with per-tenant cost from the ledger and p50/p95 dashboards from `latency_ms`.

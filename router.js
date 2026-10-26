@@ -13,6 +13,19 @@ const registry = {
 };
 const { randomUUID } = require("crypto");
 
+// Model routing: short, well-specified copy tasks (listings, captions) use the
+// "fast" tier; planning, review and pricing use the "reasoning" tier. Each tier
+// falls back to the single configured model, so existing setups keep working.
+const TIER_ENV = {
+  fast: { openai: "OPENAI_FAST_MODEL", gateway: "AI_GATEWAY_FAST_MODEL" },
+  reasoning: { openai: "OPENAI_REASONING_MODEL", gateway: "AI_GATEWAY_REASONING_MODEL" }
+};
+function modelForTier(tier = "reasoning") {
+  const names = TIER_ENV[tier] || TIER_ENV.reasoning;
+  const tiered = process.env[process.env.OPENAI_API_KEY ? names.openai : names.gateway];
+  return String(tiered || "").trim() || registry.openai.model();
+}
+
 function normalizeUsage(usage = {}) {
   const inputTokens = usage.inputTokens ?? usage.input_tokens ?? 0;
   const outputTokens = usage.outputTokens ?? usage.output_tokens ?? 0;
@@ -36,6 +49,7 @@ function gatewayRouting({ userId, workspaceId, schemaName, primaryModel = regist
 function providerStatus() {
   return Object.fromEntries(Object.entries(registry).map(([id, item]) => [id, {
     id, label: item.label, role: item.role, model: item.model(), ready: item.ready(),
+    ...(id === "openai" ? { tiers: { fast: modelForTier("fast"), reasoning: modelForTier("reasoning") } } : {}),
     ...(id === "openai" && !process.env.OPENAI_API_KEY ? { fallbackModels: gatewayFallbackModels(item.model()) } : {})
   }]));
 }
@@ -65,7 +79,8 @@ function parseGatewayJson(text) {
 
 async function runOpenAI(input, schema, options = {}) {
   if (!registry.openai.ready()) return null;
-  const model = process.env.OPENAI_API_KEY ? registry.openai.model() : (options.model || registry.openai.model()), generationId = randomUUID(), startedAt = Date.now();
+  const tier = options.tier === "fast" ? "fast" : "reasoning";
+  const model = process.env.OPENAI_API_KEY ? modelForTier(tier) : (options.model || modelForTier(tier)), generationId = randomUUID(), startedAt = Date.now();
   const { userId, workspaceId, ...promptInput } = input;
   const instructions = options.instructions || [
     "You are Nova.Ai's Founder Agent.",
@@ -89,7 +104,7 @@ async function runOpenAI(input, schema, options = {}) {
     });
     return {
       plan: parseGatewayJson(result.text),
-      contribution: { id:generationId, provider: "Vercel AI Gateway", role, model:result.response?.modelId || model, usage:normalizeUsage(result.usage), latencyMs:Date.now()-startedAt, createdAt:new Date().toISOString() }
+      contribution: { id:generationId, provider: "Vercel AI Gateway", role, model:result.response?.modelId || model, tier, usage:normalizeUsage(result.usage), latencyMs:Date.now()-startedAt, createdAt:new Date().toISOString() }
     };
   }
 
@@ -98,7 +113,7 @@ async function runOpenAI(input, schema, options = {}) {
     headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      reasoning: { effort: "medium" },
+      reasoning: { effort: tier === "fast" ? "low" : "medium" },
       input: [
         { role: "developer", content: instructions },
         { role: "user", content: JSON.stringify(promptInput) }
@@ -111,7 +126,7 @@ async function runOpenAI(input, schema, options = {}) {
   const result = await response.json();
   const text = result.output_text || result.output?.flatMap(item => item.content || []).find(item => item.type === "output_text")?.text;
   if (!text) throw new Error("OpenAI returned no launch plan");
-  return { plan: JSON.parse(text), contribution: { id:response.headers.get("x-request-id") || generationId, provider: "OpenAI", role, model, usage:normalizeUsage(result.usage), latencyMs:Date.now()-startedAt, createdAt:new Date().toISOString() } };
+  return { plan: JSON.parse(text), contribution: { id:response.headers.get("x-request-id") || generationId, provider: "OpenAI", role, model, tier, usage:normalizeUsage(result.usage), latencyMs:Date.now()-startedAt, createdAt:new Date().toISOString() } };
 }
 
 async function generate(input, fallback, schema) {
@@ -162,7 +177,7 @@ function fallbackResellerListing(product) {
 async function generateResellerListing(input) {
   const schema={type:"object",additionalProperties:false,required:["title","description","tags","socialCaption","pricingGuidance","reviewWarnings"],properties:{title:{type:"string",maxLength:140},description:{type:"string",maxLength:1800},tags:{type:"array",items:{type:"string"},maxItems:8},socialCaption:{type:"string",maxLength:500},pricingGuidance:{type:"string",maxLength:500},reviewWarnings:{type:"array",items:{type:"string"},maxItems:4}}};
   const warnings=[];let output=null;
-  try{output=await runOpenAI(input,schema,{role:"Reseller Listing Agent",schemaName:"reseller_listing_kit",instructions:"You are Nova.Ai's Reseller Listing Agent. Create accurate, channel-aware selling copy using only the seller-verified product facts supplied. Never invent brand, authenticity, measurements, materials, provenance, demand, market prices, product performance, shipping terms, or condition details. The pricing guidance must clearly remain advice, not a valuation or promise. Put any missing facts the seller should confirm into reviewWarnings. Do not claim that anything was published or sold. Return one JSON object matching the schema."});}catch(error){warnings.push(error.message)}
+  try{output=await runOpenAI(input,schema,{role:"Reseller Listing Agent",tier:"fast",schemaName:"reseller_listing_kit",instructions:"You are Nova.Ai's Reseller Listing Agent. Create accurate, channel-aware selling copy using only the seller-verified product facts supplied. Never invent brand, authenticity, measurements, materials, provenance, demand, market prices, product performance, shipping terms, or condition details. The pricing guidance must clearly remain advice, not a valuation or promise. Put any missing facts the seller should confirm into reviewWarnings. Do not claim that anything was published or sold. Return one JSON object matching the schema."});}catch(error){warnings.push(error.message)}
   if(!output)output={plan:fallbackResellerListing(input.product||input),contribution:{id:randomUUID(),provider:"Nova",role:"Reseller Listing Agent",model:"Demo engine",usage:{inputTokens:0,outputTokens:0,totalTokens:0},createdAt:new Date().toISOString()}};
   return{kit:output.plan,contribution:output.contribution,warnings};
 }
@@ -176,7 +191,7 @@ function fallbackResellerCampaign(input) {
 async function generateResellerCampaign(input) {
   const schema={type:"object",additionalProperties:false,required:["headline","message","caption","callToAction","style","reviewWarnings"],properties:{headline:{type:"string",maxLength:100},message:{type:"string",maxLength:240},caption:{type:"string",maxLength:500},callToAction:{type:"string",maxLength:160},style:{type:"string",enum:["editorial","minimal","sale"]},reviewWarnings:{type:"array",items:{type:"string"},maxItems:4}}};
   const warnings=[];let output=null;
-  try{output=await runOpenAI(input,schema,{role:"Nova Campaign Copilot",schemaName:"reseller_campaign_draft",instructions:"You are Nova.Ai's Campaign Copilot. Follow the user's stated audience, tone, campaign goal, visual style, call to action, and special instructions. Create one polished social campaign draft using only the supplied seller-verified product facts. Never invent authenticity, scarcity, demand, discounts, performance, materials, provenance, shipping terms, reviews, or product details. Do not claim the content was approved, scheduled, posted, or sold. Keep the draft persuasive but truthful. Use the preferredStyle exactly. Put facts that need human confirmation in reviewWarnings. All output remains a draft requiring the signed-in user's approval. Return one JSON object matching the schema."});}catch(error){warnings.push(error.message)}
+  try{output=await runOpenAI(input,schema,{role:"Nova Campaign Copilot",tier:"fast",schemaName:"reseller_campaign_draft",instructions:"You are Nova.Ai's Campaign Copilot. Follow the user's stated audience, tone, campaign goal, visual style, call to action, and special instructions. Create one polished social campaign draft using only the supplied seller-verified product facts. Never invent authenticity, scarcity, demand, discounts, performance, materials, provenance, shipping terms, reviews, or product details. Do not claim the content was approved, scheduled, posted, or sold. Keep the draft persuasive but truthful. Use the preferredStyle exactly. Put facts that need human confirmation in reviewWarnings. All output remains a draft requiring the signed-in user's approval. Return one JSON object matching the schema."});}catch(error){warnings.push(error.message)}
   if(!output)output={plan:fallbackResellerCampaign(input),contribution:{id:randomUUID(),provider:"Nova",role:"Nova Campaign Copilot",model:"Demo engine",usage:{inputTokens:0,outputTokens:0,totalTokens:0},createdAt:new Date().toISOString()}};
   return{campaign:output.plan,contribution:output.contribution,warnings};
 }
@@ -191,4 +206,4 @@ async function generateAgentTask(input, fallback, schema, options) {
   return{result:output.plan,contribution:output.contribution,warnings};
 }
 
-module.exports = { generateAgentTask, providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce, generateResellerListing, fallbackResellerListing, generateResellerCampaign, fallbackResellerCampaign };
+module.exports = { modelForTier, generateAgentTask, providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce, generateResellerListing, fallbackResellerListing, generateResellerCampaign, fallbackResellerCampaign };
