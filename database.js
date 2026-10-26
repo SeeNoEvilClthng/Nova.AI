@@ -13,6 +13,20 @@ db.exec(`
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS ai_usage_events (
+    generation_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL,
+    latency_ms INTEGER,
+    fallback INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (workspace_id, generation_id)
+  );
 `);
 
 const emptyState = () => ({ plan: null, approved: false, activities: [], evaluation: null });
@@ -64,4 +78,14 @@ function deleteWorkspace(id) {
   return Number(result.changes) > 0;
 }
 
-module.exports = { ensureDefaultWorkspace, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace };
+function insertAiUsage(rows) {
+  const insert = db.prepare("INSERT OR IGNORE INTO ai_usage_events (generation_id, workspace_id, operation, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, fallback, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const now = new Date().toISOString();
+  for (const row of rows) insert.run(row.generation_id, row.workspace_id, row.operation, row.provider, row.model, row.input_tokens, row.output_tokens, row.total_tokens, row.latency_ms, row.fallback ? 1 : 0, now);
+}
+
+function workspaceAiTokens(workspaceId) {
+  return Number(db.prepare("SELECT COALESCE(SUM(total_tokens), 0) AS total FROM ai_usage_events WHERE workspace_id = ?").get(workspaceId).total);
+}
+
+module.exports = { ensureDefaultWorkspace, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, insertAiUsage, workspaceAiTokens };

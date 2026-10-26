@@ -184,20 +184,66 @@ async function unpublishPage(req, workspaceId) {
   return rows[0] || null;
 }
 
+// Visitor writes go through the server (rate limited, optionally CAPTCHA
+// checked) with the service role; anonymous Data API inserts are revoked so
+// they cannot bypass those checks.
 async function captureLead(pageId, email) {
-  return publicRequest("/rest/v1/nova_page_leads", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ page_id:pageId, email }) });
+  return adminRequest("/rest/v1/nova_page_leads", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ page_id:pageId, email }) });
 }
 
 async function recordPageEvent(pageId, eventType) {
-  return publicRequest("/rest/v1/nova_page_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ page_id:pageId, event_type:eventType }) });
+  return adminRequest("/rest/v1/nova_page_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ page_id:pageId, event_type:eventType }) });
+}
+
+// Returns true when the caller is over the limit.
+async function rateLimitHit(bucket, maxHits, windowSeconds) {
+  return Boolean(await adminRequest("/rest/v1/rpc/nova_rate_limit_hit", { method:"POST", body:JSON.stringify({ bucket_key:bucket, max_hits:maxHits, window_seconds:windowSeconds }) }));
+}
+
+// Counts rows in the database instead of downloading them. The previous
+// approach fetched every event row, which got slower with traffic and was
+// silently capped at the Data API's 1,000-row response limit.
+async function countRows(path, req) {
+  const token = tokenFromRequest(req);
+  if (!token) throw Object.assign(new Error("Authentication required"), { status: 401 });
+  const response = await fetch(`${baseUrl()}${path}`, { method: "HEAD", headers: { apikey: publishableKey(), Authorization: `Bearer ${token}`, Prefer: "count=exact" } });
+  if (!response.ok) throw Object.assign(new Error(`Supabase count failed (${response.status})`), { status: response.status });
+  const total = Number(String(response.headers.get("content-range") || "").split("/")[1]);
+  return Number.isFinite(total) ? total : 0;
 }
 
 async function getPageStats(req, pageId) {
-  const [events, leads] = await Promise.all([
-    request(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(pageId)}&select=event_type`, req),
-    request(`/rest/v1/nova_page_leads?page_id=eq.${encodeURIComponent(pageId)}&select=id,email,status,created_at,updated_at&order=created_at.desc`, req)
+  const page = encodeURIComponent(pageId);
+  const [views, signups, leads] = await Promise.all([
+    countRows(`/rest/v1/nova_page_events?page_id=eq.${page}&event_type=eq.view&select=id`, req),
+    countRows(`/rest/v1/nova_page_leads?page_id=eq.${page}&select=id`, req),
+    request(`/rest/v1/nova_page_leads?page_id=eq.${page}&select=id,email,status,created_at,updated_at&order=created_at.desc&limit=200`, req)
   ]);
-  return { views:events.filter(e=>e.event_type==="view").length, signups:leads.length, leads };
+  return { views, signups, leads };
+}
+
+async function insertAiUsage(rows) {
+  return adminRequest("/rest/v1/nova_ai_usage_events?on_conflict=workspace_id,generation_id", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify(rows)
+  });
+}
+
+async function workspaceAiTokens(req, workspaceId) {
+  const total = await request("/rest/v1/rpc/nova_workspace_ai_tokens", req, { method: "POST", body: JSON.stringify({ target: workspaceId }) });
+  return Number(total) || 0;
+}
+
+async function adminGetWorkspace(id, fields = "id,user_id,name") {
+  const rows = await adminRequest(`/rest/v1/nova_workspaces?id=eq.${encodeURIComponent(id)}&select=${fields}&limit=1`);
+  return rows[0] || null;
+}
+
+// Filters in the database so the daily cron no longer downloads every
+// workspace's full state to find the few with automation enabled.
+async function adminListAutomatedWorkspaces() {
+  return adminRequest("/rest/v1/nova_workspaces?select=id,name,state,updated_at&state->resellerStudio->campaignAutomation->>enabled=eq.true&order=updated_at.asc");
 }
 
 async function updateLead(req, id, status) {
@@ -209,4 +255,6 @@ async function updateLead(req, id, status) {
   return rows[0] || null;
 }
 
-module.exports = { configured, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead };
+const hasSecret = () => Boolean(secretKey());
+
+module.exports = { configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };

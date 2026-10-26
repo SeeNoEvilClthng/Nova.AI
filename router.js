@@ -65,7 +65,7 @@ function parseGatewayJson(text) {
 
 async function runOpenAI(input, schema, options = {}) {
   if (!registry.openai.ready()) return null;
-  const model = process.env.OPENAI_API_KEY ? registry.openai.model() : (options.model || registry.openai.model()), generationId = randomUUID();
+  const model = process.env.OPENAI_API_KEY ? registry.openai.model() : (options.model || registry.openai.model()), generationId = randomUUID(), startedAt = Date.now();
   const { userId, workspaceId, ...promptInput } = input;
   const instructions = options.instructions || [
     "You are Nova.Ai's Founder Agent.",
@@ -89,7 +89,7 @@ async function runOpenAI(input, schema, options = {}) {
     });
     return {
       plan: parseGatewayJson(result.text),
-      contribution: { id:generationId, provider: "Vercel AI Gateway", role, model:result.response?.modelId || model, usage:normalizeUsage(result.usage), createdAt:new Date().toISOString() }
+      contribution: { id:generationId, provider: "Vercel AI Gateway", role, model:result.response?.modelId || model, usage:normalizeUsage(result.usage), latencyMs:Date.now()-startedAt, createdAt:new Date().toISOString() }
     };
   }
 
@@ -111,7 +111,7 @@ async function runOpenAI(input, schema, options = {}) {
   const result = await response.json();
   const text = result.output_text || result.output?.flatMap(item => item.content || []).find(item => item.type === "output_text")?.text;
   if (!text) throw new Error("OpenAI returned no launch plan");
-  return { plan: JSON.parse(text), contribution: { id:response.headers.get("x-request-id") || generationId, provider: "OpenAI", role, model, usage:normalizeUsage(result.usage), createdAt:new Date().toISOString() } };
+  return { plan: JSON.parse(text), contribution: { id:response.headers.get("x-request-id") || generationId, provider: "OpenAI", role, model, usage:normalizeUsage(result.usage), latencyMs:Date.now()-startedAt, createdAt:new Date().toISOString() } };
 }
 
 async function generate(input, fallback, schema) {
@@ -133,7 +133,7 @@ async function generateWorkforce(input, fallback, schema, reviewOptions = {}) {
   try {
     output = await runOpenAI(input, schema, {
       role:"Workforce Orchestrator",schemaName:"employee_run",description:"A coordinated set of specialist employee deliverables.",
-      instructions:"You are Nova.Ai's workforce orchestrator. Act as five coordinated specialist employees: Strategy, Research, Product, Growth, and Operations. Give each employee a concrete deliverable and an explicit handoff. Use only the provided company context. Distinguish assumptions from evidence. Never claim that external research, customer contact, publishing, spending, deployment, or communication occurred. All external actions must remain proposals requiring founder approval. Return every employee with status completed."
+      instructions:"You are Nova.Ai's workforce orchestrator. Act as five coordinated specialist employees: Strategy, Research, Product, Growth, and Operations. Give each employee a concrete deliverable and an explicit handoff. Use only the provided company context. Distinguish assumptions from evidence. Never claim that external research, customer contact, publishing, spending, deployment, or communication occurred. All external actions must remain proposals requiring founder approval. Return every employee with status drafted: the deliverable is a draft, not executed work."
     });
   } catch (error) { warnings.push(error.message); }
   if (!output) output = { plan:fallback(input), contribution:{ id:randomUUID(),provider:"Nova",role:"Workforce Orchestrator",model:"Demo engine",createdAt:new Date().toISOString() } };
@@ -181,4 +181,14 @@ async function generateResellerCampaign(input) {
   return{campaign:output.plan,contribution:output.contribution,warnings};
 }
 
-module.exports = { providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce, generateResellerListing, fallbackResellerListing, generateResellerCampaign, fallbackResellerCampaign };
+// One specialist agent task with a schema-checked result. The demo fallback is
+// labelled with model "Demo engine" so callers can show it as a template rather
+// than as AI-generated work.
+async function generateAgentTask(input, fallback, schema, options) {
+  const warnings=[];let output=null;
+  try{output=await runOpenAI(input,schema,options)}catch(error){warnings.push(error.message)}
+  if(!output)output={plan:fallback(input),contribution:{id:randomUUID(),provider:"Nova",role:options.role,model:"Demo engine",usage:{inputTokens:0,outputTokens:0,totalTokens:0},createdAt:new Date().toISOString()}};
+  return{result:output.plan,contribution:output.contribution,warnings};
+}
+
+module.exports = { generateAgentTask, providerStatus, evaluatePlan, gatewayFallbackModels, gatewayRouting, generate, generateWorkforce, generateResellerListing, fallbackResellerListing, generateResellerCampaign, fallbackResellerCampaign };

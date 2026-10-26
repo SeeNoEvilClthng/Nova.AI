@@ -6,6 +6,7 @@ import legacyApp from "../server.js";
 import supabase from "../supabase.js";
 import database from "../database.js";
 import toolPermissions from "../tool-permissions.js";
+import aiAccess from "../ai-access.js";
 import {getToken} from "@vercel/connect";
 
 type MissionRecord={id:string;runId:string;workspaceId:string;objective:string;approvalToken:string;status:string;createdAt:string;updatedAt:string};
@@ -32,7 +33,10 @@ app.post("/api/durable-missions",json,async(req,res)=>{
     const workspaceId=String(req.body.workspaceId||"").trim(),objective=String(req.body.objective||"").trim().slice(0,1200),workspace=await workspaceFor(req,workspaceId);
     if(!workspace)return res.status(404).json({error:"Workspace not found"});
     if(objective.length<12)return res.status(400).json({error:"Give the durable mission a specific outcome"});
-    const id=crypto.randomUUID(),run=await start(novaMissionWorkflow,[{missionId:id,workspaceId,company:workspace.name,objective}]),now=new Date().toISOString();
+    // Missions now make real model calls, so they pass the same entitlement and
+    // token-budget gate as every other AI route.
+    const user=supabase.configured()?await supabase.verifyUser(req):null;await aiAccess.assertCanGenerate(req,user,workspaceId);
+    const id=crypto.randomUUID(),run=await start(novaMissionWorkflow,[{missionId:id,workspaceId,userId:user?.id||null,company:workspace.name,objective}]),now=new Date().toISOString();
     const mission:MissionRecord={id,runId:run.runId,workspaceId,objective,approvalToken:`nova-mission:${id}:approval`,status:"running",createdAt:now,updatedAt:now};
     const state={...(workspace.state||{}),durableMissions:[mission,...missionList(workspace)].slice(0,30)};await saveWorkspace(req,workspaceId,state);
     return res.status(201).json({mission});

@@ -5,7 +5,8 @@ const router = require("./router");
 const database = require("./database");
 const supabase = require("./supabase");
 const billing = require("./billing");
-const { assertAiBudget } = require("./ai-budget");
+const { preserveUsage } = require("./ai-budget");
+const { usageLedger, accountEntitlement, enforceAiBudget } = require("./ai-access");
 const entitlements = require("./entitlements");
 const execution = require("./execution-core");
 const toolPermissions = require("./tool-permissions");
@@ -43,11 +44,13 @@ const staticFiles = new Map([
   ["/terms", ["terms.html", fs.readFileSync(path.join(__dirname, "terms.html"))]],
   ["/billing-policy", ["billing-policy.html", fs.readFileSync(path.join(__dirname, "billing-policy.html"))]],
   ["/shipping-returns", ["shipping-returns.html", fs.readFileSync(path.join(__dirname, "shipping-returns.html"))]],
-  ["/nova-mark.png", ["nova-mark.png", fs.readFileSync(path.join(__dirname, "nova-mark.png"))]],
-  ["/og-nova.png", ["og-nova.png", fs.readFileSync(path.join(__dirname, "og-nova.png"))]],
-  ["/social/baccarat-rouge-540-xayresell-v3.png", ["baccarat-rouge-540-xayresell-v3.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-xayresell-v3.png"))]],
-  ["/social/baccarat-rouge-540-aura-modern-v2.png", ["baccarat-rouge-540-aura-modern-v2.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-aura-modern-v2.png"))]],
-  ["/social/baccarat-rouge-540-extrait-aura-editorial-v1.png", ["baccarat-rouge-540-extrait-aura-editorial-v1.png", fs.readFileSync(path.join(__dirname, "public/social/baccarat-rouge-540-extrait-aura-editorial-v1.png"))]],
+  // Images are read on first request instead of at boot; together they are
+  // tens of megabytes and were inflating every serverless cold start.
+  ["/nova-mark.png", ["nova-mark.png", null, path.join(__dirname, "nova-mark.png")]],
+  ["/og-nova.png", ["og-nova.png", null, path.join(__dirname, "og-nova.png")]],
+  ["/social/baccarat-rouge-540-xayresell-v3.png", ["baccarat-rouge-540-xayresell-v3.png", null, path.join(__dirname, "public/social/baccarat-rouge-540-xayresell-v3.png")]],
+  ["/social/baccarat-rouge-540-aura-modern-v2.png", ["baccarat-rouge-540-aura-modern-v2.png", null, path.join(__dirname, "public/social/baccarat-rouge-540-aura-modern-v2.png")]],
+  ["/social/baccarat-rouge-540-extrait-aura-editorial-v1.png", ["baccarat-rouge-540-extrait-aura-editorial-v1.png", null, path.join(__dirname, "public/social/baccarat-rouge-540-extrait-aura-editorial-v1.png")]],
   ["/index.html", ["index.html", fs.readFileSync(path.join(__dirname, "index.html"))]],
   ["/styles.css", ["styles.css", fs.readFileSync(path.join(__dirname, "styles.css"))]],
   ["/router.css", ["router.css", fs.readFileSync(path.join(__dirname, "router.css"))]],
@@ -105,16 +108,49 @@ const auraProductImageDirectory = path.join(__dirname, "public/product-images/au
 if (fs.existsSync(auraProductImageDirectory)) {
   for (const filename of fs.readdirSync(auraProductImageDirectory)) {
     if (!/^[a-z0-9-]+\.png$/i.test(filename)) continue;
-    staticFiles.set(`/product-images/aura/${filename}`, [filename, fs.readFileSync(path.join(auraProductImageDirectory, filename))]);
+    staticFiles.set(`/product-images/aura/${filename}`, [filename, null, path.join(auraProductImageDirectory, filename)]);
   }
 }
-const rateBuckets = new Map();
+const assetEtags = new Map();
+function assetBody(asset) {
+  if (!asset[1]) asset[1] = fs.readFileSync(asset[2]);
+  return asset[1];
+}
+function assetEtag(pathname, body) {
+  if (!assetEtags.has(pathname)) assetEtags.set(pathname, `"${crypto.createHash("sha1").update(body).digest("base64url")}"`);
+  return assetEtags.get(pathname);
+}
+// Shell HTML, JS and CSS contain no user data. Browsers always revalidate
+// (cheap 304s via the ETag) while the Vercel edge serves them for 10 minutes;
+// each deployment purges the edge cache, so releases are never stale.
+const isBundleRoute = pathname => /^\/bundle-[A-Za-z0-9_-]{16}\.(?:css|js)$/.test(pathname);
+// NOVA_DISABLE_BUNDLING=1 serves the original individual files.
+if (process.env.NOVA_DISABLE_BUNDLING !== "1") {
+  const bundleHtml = require("./asset-bundler").createBundler({
+    resolve: href => { const route = `/${href.replace(/^\//, "").split("?")[0]}`; return /\.(?:css|js)$/.test(route) && staticFiles.has(route) ? route : null; },
+    read: route => assetBody(staticFiles.get(route)),
+    emit: (route, body) => staticFiles.set(route, [route.slice(1), body])
+  });
+  for (const asset of staticFiles.values()) if (asset[0].endsWith(".html") && asset[1]) asset[1] = Buffer.from(bundleHtml(asset[1].toString("utf8")));
+}
+function assetCacheControl(extension, pathname = "") {
+  if (isBundleRoute(pathname)) return "public, max-age=31536000, immutable";
+  if ([".html", ".js", ".css"].includes(extension)) return "public, max-age=0, must-revalidate, s-maxage=600, stale-while-revalidate=86400";
+  if (extension === ".png") return "public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800";
+  return "public, max-age=300, stale-while-revalidate=86400";
+}
+const { limited: rateLimited, clientIp } = require("./rate-limit").createRateLimiter({ supabase, secret: () => process.env.EXECUTION_RECEIPT_SECRET || process.env.SUPABASE_SECRET_KEY || "" });
 
-function clientIp(req) { return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim(); }
-function rateLimited(req, scope, limit, windowMs = 3_600_000) {
-  const key = `${scope}:${clientIp(req)}`, now = Date.now(), recent = (rateBuckets.get(key) || []).filter(time => now - time < windowMs);
-  if (recent.length >= limit) return true;
-  recent.push(now); rateBuckets.set(key, recent); return false;
+// Optional Cloudflare Turnstile on public waitlist forms. Disabled unless both
+// keys are configured, so existing deployments keep working unchanged.
+const turnstileConfig = () => process.env.TURNSTILE_SITE_KEY && process.env.TURNSTILE_SECRET_KEY ? { siteKey: process.env.TURNSTILE_SITE_KEY, secretKey: process.env.TURNSTILE_SECRET_KEY } : null;
+async function verifyTurnstile(token, req) {
+  const config = turnstileConfig();
+  if (!config) return true;
+  if (!token) return false;
+  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: new URLSearchParams({ secret: config.secretKey, response: String(token).slice(0, 2048), remoteip: clientIp(req) }), signal: AbortSignal.timeout(5_000) });
+  const result = await response.json().catch(() => ({}));
+  return response.ok && result.success === true;
 }
 
 function productionReady() {
@@ -134,8 +170,8 @@ async function completeInstagramOAuth(res,requestUrl){
   try{
     const config=instagramOAuthConfig(),state=verifyInstagramState(requestUrl.searchParams.get("state")),redirectUri=String(state.redirectUri||config.redirectUri),code=String(requestUrl.searchParams.get("code")||"").replace(/#_$/,'');
     if(!code)throw Object.assign(new Error(requestUrl.searchParams.get("error_description")||"Instagram did not authorize this connection"),{status:400});
-    const workspaceRows=await supabase.adminListWorkspaces(),workspace=workspaceRows.find(item=>item.id===state.workspaceId);
-    if(!workspace)throw Object.assign(new Error("Workspace not found"),{status:404});
+    const workspace=await supabase.adminGetWorkspace(state.workspaceId);
+    if(!workspace||workspace.user_id!==state.userId)throw Object.assign(new Error("Workspace not found"),{status:404});
     const tokenForm=new FormData();
     tokenForm.set("client_id",config.appId);tokenForm.set("client_secret",config.appSecret);tokenForm.set("grant_type","authorization_code");tokenForm.set("redirect_uri",redirectUri);tokenForm.set("code",code);
     const tokenResponse=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",body:tokenForm}),tokenPayload=await tokenResponse.json(),shortToken=Array.isArray(tokenPayload?.data)?tokenPayload.data[0]:tokenPayload;
@@ -251,9 +287,9 @@ function subscriptionRecord(subscription, fallback = {}) {
   };
 }
 function escapeHtml(value) { return String(value || "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
-function publicPageHtml(page) {
+function publicPageHtml(page, turnstileSiteKey = "") {
   const s=page.snapshot||{};
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.title)}</title><meta name="description" content="${escapeHtml(s.subhead)}"><style>*{box-sizing:border-box}body{margin:0;background:#0e1424;color:#fff;font-family:Inter,system-ui,sans-serif}nav{height:76px;display:flex;align-items:center;justify-content:space-between;max-width:1120px;margin:auto;padding:0 24px;border-bottom:1px solid #ffffff18}nav b{font-size:20px}nav span{color:#aeb5c7;font-size:13px}.hero{text-align:center;padding:110px 24px 85px;background:radial-gradient(circle at 75% 0,#6558e855,transparent 35%)}small{color:#a69cff;letter-spacing:.14em;text-transform:uppercase;font-weight:800}h1{font-size:clamp(42px,7vw,76px);line-height:1.05;max-width:980px;margin:25px auto}p{color:#bbc2d3;line-height:1.7;max-width:700px;margin:0 auto 34px;font-size:18px}form{display:flex;max-width:520px;margin:auto;gap:10px}input{flex:1;padding:16px;border:1px solid #ffffff30;border-radius:10px;background:#ffffff0d;color:#fff;font-size:15px}button{border:0;border-radius:10px;background:#7668ef;color:#fff;padding:16px 21px;font-weight:800;cursor:pointer}.trust{display:block;color:#8fdcc4;margin-top:18px;font-size:12px}.proof{display:grid;grid-template-columns:repeat(3,1fr);max-width:900px;margin:0 auto 60px;border:1px solid #ffffff15}.proof span{text-align:center;padding:26px;color:#aeb5c7;border-right:1px solid #ffffff15}.proof span:last-child{border:0}#message{min-height:24px;margin-top:14px;color:#8fdcc4}@media(max-width:620px){form{flex-direction:column}.proof{grid-template-columns:1fr}.proof span{border-right:0;border-bottom:1px solid #ffffff15}}</style></head><body><nav><b>${escapeHtml(page.title)}</b><span>Product · About · Contact</span></nav><main class="hero"><small>${escapeHtml(s.eyebrow)}</small><h1>${escapeHtml(s.headline)}</h1><p>${escapeHtml(s.subhead)}</p><form id="waitlist"><input id="email" type="email" required maxlength="254" placeholder="you@example.com" aria-label="Email address"><button>${escapeHtml(s.cta||"Join waitlist")} →</button></form><div id="message"></div><span class="trust">✓ ${escapeHtml(s.trust)}</span></main><div class="proof"><span>Clear outcome</span><span>Human supervised</span><span>Built to validate</span></div><script>fetch('/api/public/${encodeURIComponent(page.slug)}/view',{method:'POST'});document.getElementById('waitlist').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;const r=await fetch('/api/public/${encodeURIComponent(page.slug)}/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value})});const d=await r.json();document.getElementById('message').textContent=r.ok?'You’re on the early-access list.':(d.error||'Please try again.');if(r.ok)e.target.reset();b.disabled=false};</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(page.title)}</title><meta name="description" content="${escapeHtml(s.subhead)}"><style>*{box-sizing:border-box}body{margin:0;background:#0e1424;color:#fff;font-family:Inter,system-ui,sans-serif}nav{height:76px;display:flex;align-items:center;justify-content:space-between;max-width:1120px;margin:auto;padding:0 24px;border-bottom:1px solid #ffffff18}nav b{font-size:20px}nav span{color:#aeb5c7;font-size:13px}.hero{text-align:center;padding:110px 24px 85px;background:radial-gradient(circle at 75% 0,#6558e855,transparent 35%)}small{color:#a69cff;letter-spacing:.14em;text-transform:uppercase;font-weight:800}h1{font-size:clamp(42px,7vw,76px);line-height:1.05;max-width:980px;margin:25px auto}p{color:#bbc2d3;line-height:1.7;max-width:700px;margin:0 auto 34px;font-size:18px}form{display:flex;max-width:520px;margin:auto;gap:10px}input{flex:1;padding:16px;border:1px solid #ffffff30;border-radius:10px;background:#ffffff0d;color:#fff;font-size:15px}button{border:0;border-radius:10px;background:#7668ef;color:#fff;padding:16px 21px;font-weight:800;cursor:pointer}.trust{display:block;color:#8fdcc4;margin-top:18px;font-size:12px}.proof{display:grid;grid-template-columns:repeat(3,1fr);max-width:900px;margin:0 auto 60px;border:1px solid #ffffff15}.proof span{text-align:center;padding:26px;color:#aeb5c7;border-right:1px solid #ffffff15}.proof span:last-child{border:0}#message{min-height:24px;margin-top:14px;color:#8fdcc4}@media(max-width:620px){form{flex-direction:column}.proof{grid-template-columns:1fr}.proof span{border-right:0;border-bottom:1px solid #ffffff15}}</style></head><body><nav><b>${escapeHtml(page.title)}</b><span>Product · About · Contact</span></nav><main class="hero"><small>${escapeHtml(s.eyebrow)}</small><h1>${escapeHtml(s.headline)}</h1><p>${escapeHtml(s.subhead)}</p><form id="waitlist"><input id="email" type="email" required maxlength="254" placeholder="you@example.com" aria-label="Email address"><button>${escapeHtml(s.cta||"Join waitlist")} →</button></form>${turnstileSiteKey?`<div class="cf-turnstile" data-sitekey="${escapeHtml(turnstileSiteKey)}" data-theme="dark" style="margin-top:14px"></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`:""}<div id="message"></div><span class="trust">✓ ${escapeHtml(s.trust)}</span></main><div class="proof"><span>Clear outcome</span><span>Human supervised</span><span>Built to validate</span></div><script>fetch('/api/public/${encodeURIComponent(page.slug)}/view',{method:'POST'});document.getElementById('waitlist').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;const r=await fetch('/api/public/${encodeURIComponent(page.slug)}/lead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value,turnstileToken:document.querySelector('[name=\"cf-turnstile-response\"]')?.value||''})});const d=await r.json();document.getElementById('message').textContent=r.ok?'You’re on the early-access list.':(d.error||'Please try again.');if(r.ok)e.target.reset();b.disabled=false};</script></body></html>`;
 }
 
 function fallbackPlan({ idea, customer, revenue, goal, feedback, currentPlan }) {
@@ -297,11 +333,11 @@ function fallbackWorkforce(input) {
     summary: revision ? `The Nova.Ai workforce revised “${goal}” using the founder’s feedback: ${String(revision.founderFeedback||"").slice(0,240)}` : `The Nova.Ai workforce divided “${goal}” into a supervised execution plan for ${company}.`,
     needsApproval: true,
     employees: [
-      { role:"Strategy Employee",department:"Strategy",status:"completed",deliverable:`Define the smallest measurable version of the objective and a 14-day scorecard. Keep every activity tied to: ${goal}` ,handoff:"Research validates the riskiest assumption before execution."},
-      { role:"Research Employee",department:"Research",status:"completed",deliverable:"Interview five target customers, document their current alternative, urgency, decision process, and willingness to pay. Separate observed evidence from assumptions.",handoff:"Product uses repeated problems—not founder guesses—to set scope."},
-      { role:"Product Employee",department:"Product",status:"completed",deliverable:"Turn the strongest validated problem into one testable customer workflow. Define acceptance criteria, exclusions, and the smallest launchable version.",handoff:"Marketing receives one clear outcome and proof point."},
-      { role:"Growth Employee",department:"Marketing & sales",status:"completed",deliverable:"Draft a focused offer, a five-message outreach sequence, and a list of twenty qualified prospects. Do not send anything until the founder approves it.",handoff:"Operations tracks replies, meetings, and conversions."},
-      { role:"Operations Employee",department:"Operations",status:"completed",deliverable:"Create a daily operating rhythm with owners, deadlines, success metrics, blockers, and an end-of-week decision: continue, revise, or stop.",handoff:"Founder reviews all external communication and spending."}
+      { role:"Strategy Employee",department:"Strategy",status:"drafted",deliverable:`Define the smallest measurable version of the objective and a 14-day scorecard. Keep every activity tied to: ${goal}` ,handoff:"Research validates the riskiest assumption before execution."},
+      { role:"Research Employee",department:"Research",status:"drafted",deliverable:"Interview five target customers, document their current alternative, urgency, decision process, and willingness to pay. Separate observed evidence from assumptions.",handoff:"Product uses repeated problems—not founder guesses—to set scope."},
+      { role:"Product Employee",department:"Product",status:"drafted",deliverable:"Turn the strongest validated problem into one testable customer workflow. Define acceptance criteria, exclusions, and the smallest launchable version.",handoff:"Marketing receives one clear outcome and proof point."},
+      { role:"Growth Employee",department:"Marketing & sales",status:"drafted",deliverable:"Draft a focused offer, a five-message outreach sequence, and a list of twenty qualified prospects. Do not send anything until the founder approves it.",handoff:"Operations tracks replies, meetings, and conversions."},
+      { role:"Operations Employee",department:"Operations",status:"drafted",deliverable:"Create a daily operating rhythm with owners, deadlines, success metrics, blockers, and an end-of-week decision: continue, revise, or stop.",handoff:"Founder reviews all external communication and spending."}
     ]
   };
 }
@@ -325,7 +361,7 @@ async function runWorkforce(input) {
     type:"object",additionalProperties:false,required:["summary","needsApproval","employees"],
     properties:{
       summary:{type:"string"},needsApproval:{type:"boolean"},
-      employees:{type:"array",items:{type:"object",additionalProperties:false,required:["role","department","status","deliverable","handoff"],properties:{role:{type:"string"},department:{type:"string"},status:{type:"string",enum:["completed"]},deliverable:{type:"string"},handoff:{type:"string"}}}}
+      employees:{type:"array",items:{type:"object",additionalProperties:false,required:["role","department","status","deliverable","handoff"],properties:{role:{type:"string"},department:{type:"string"},status:{type:"string",enum:["drafted"]},deliverable:{type:"string"},handoff:{type:"string"}}}}
     }
   };
   const reviewSchema = {
@@ -336,20 +372,6 @@ async function runWorkforce(input) {
     }
   };
   return router.generateWorkforce(input, fallbackWorkforce, schema, { schema:reviewSchema, fallback:fallbackWorkforceReview });
-}
-
-async function enforceAiBudget(req, workspaceId, planCeiling) {
-  const id=String(workspaceId||"").trim();
-  if(!id)throw Object.assign(new Error("Workspace is required for AI generation"),{status:400});
-  const workspace=supabase.configured()?await supabase.getWorkspace(req,id):database.getWorkspace(id);
-  if(!workspace)throw Object.assign(new Error("Workspace not found"),{status:404});
-  assertAiBudget(workspace.state,planCeiling);
-}
-
-async function accountEntitlement(req,user) {
-  if(!supabase.configured())return entitlements.resolveEntitlement({billingEnabled:false});
-  const subscription=await supabase.getSubscription(req);
-  return entitlements.resolveEntitlement({billingEnabled:billing.status().enabled,subscription,user});
 }
 
 const app = express();
@@ -367,14 +389,14 @@ app.use(async (req, res) => {
   const requestUrl = new URL(publicUrl, `http://${req.headers.host}`);
   if (pathname === "/api/health" && req.method === "GET") return sendJson(res, 200, { status:"ok", service:"Nova.Ai", storage:supabase.configured()?"supabase":"sqlite" });
   if (pathname.startsWith("/p/") && req.method === "GET") {
-    try { const page=await supabase.getPublishedPage(decodeURIComponent(pathname.slice(3))); return page ? (res.writeHead(200,{"Content-Type":"text/html","Cache-Control":"no-store"}),res.end(publicPageHtml(page))) : res.writeHead(404).end("Page not found"); }
+    try { const page=await supabase.getPublishedPage(decodeURIComponent(pathname.slice(3))); return page ? (res.writeHead(200,{"Content-Type":"text/html","Cache-Control":"no-store"}),res.end(publicPageHtml(page,turnstileConfig()?.siteKey))) : res.writeHead(404).end("Page not found"); }
     catch { return res.writeHead(404).end("Page not found"); }
   }
   if (pathname.match(/^\/api\/public\/[^/]+\/view$/) && req.method === "POST") {
-    try { if(rateLimited(req,"page-view",120))return sendJson(res,429,{error:"Too many requests"});const slug=decodeURIComponent(pathname.split("/")[3]),page=await supabase.getPublishedPage(slug);if(!page)return sendJson(res,404,{error:"Page not found"});await supabase.recordPageEvent(page.id,"view");return sendJson(res,201,{recorded:true}); } catch(error){return sendJson(res,error.status||500,{error:error.message});}
+    try { if(await rateLimited(req,"page-view",120))return sendJson(res,429,{error:"Too many requests"});const slug=decodeURIComponent(pathname.split("/")[3]),page=await supabase.getPublishedPage(slug);if(!page)return sendJson(res,404,{error:"Page not found"});await supabase.recordPageEvent(page.id,"view");return sendJson(res,201,{recorded:true}); } catch(error){return sendJson(res,error.status||500,{error:error.message});}
   }
   if (pathname.match(/^\/api\/public\/[^/]+\/lead$/) && req.method === "POST") {
-    try { if(rateLimited(req,"waitlist",10))return sendJson(res,429,{error:"Too many signup attempts"});const slug=decodeURIComponent(pathname.split("/")[3]),page=await supabase.getPublishedPage(slug),input=await readBody(req),email=String(input.email||"").trim().toLowerCase();if(!page)return sendJson(res,404,{error:"Page not found"});if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return sendJson(res,400,{error:"Enter a valid email"});await supabase.captureLead(page.id,email);await supabase.recordPageEvent(page.id,"signup");return sendJson(res,201,{joined:true}); } catch(error){return sendJson(res,error.status===409?200:error.status||500,{error:error.message});}
+    try { if(await rateLimited(req,"waitlist",10))return sendJson(res,429,{error:"Too many signup attempts"});const slug=decodeURIComponent(pathname.split("/")[3]),page=await supabase.getPublishedPage(slug),input=await readBody(req),email=String(input.email||"").trim().toLowerCase();if(!page)return sendJson(res,404,{error:"Page not found"});if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return sendJson(res,400,{error:"Enter a valid email"});if(!await verifyTurnstile(input.turnstileToken,req))return sendJson(res,400,{error:"Please complete the verification check"});await supabase.captureLead(page.id,email);await supabase.recordPageEvent(page.id,"signup");return sendJson(res,201,{joined:true}); } catch(error){return sendJson(res,error.status===409?200:error.status||500,{error:error.message});}
   }
   if (pathname === "/api/publishing" && req.method === "GET") {
     try { const workspace=requestUrl.searchParams.get("workspace");const page=await supabase.getOwnerPage(req,workspace);const stats=page?await supabase.getPageStats(req,page.id):{views:0,signups:0,leads:[]};return sendJson(res,200,{page,stats}); } catch(error){return sendJson(res,error.status||500,{error:error.message});}
@@ -436,7 +458,7 @@ app.use(async (req, res) => {
   if (pathname === "/api/config" && req.method === "GET") return sendJson(res, 200, { supabase: supabase.publicConfig(), storage: supabase.configured() ? "supabase" : "sqlite" });
   if (pathname === "/api/execution/verify" && req.method === "POST") {
     try {
-      if(rateLimited(req,"execution-verify",60))return sendJson(res,429,{error:"Too many verification attempts"});
+      if(await rateLimited(req,"execution-verify",60))return sendJson(res,429,{error:"Too many verification attempts"});
       const input=await readBody(req),workspaceId=String(input.workspaceId||"").trim();
       if(!workspaceId)return sendJson(res,400,{error:"Workspace is required"});
       const workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
@@ -518,9 +540,6 @@ app.use(async (req, res) => {
     try{const config=instagramOAuthConfig();if(!config)return sendJson(res,503,{error:"Add META_APP_ID and META_APP_SECRET in Vercel first"});const user=await supabase.verifyUser(req),input=await readBody(req),workspaceId=String(input.workspaceId||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});socialEncryptionKey();const state=signInstagramState({userId:user.id,workspaceId,redirectUri:config.redirectUri}),url=new URL("https://www.instagram.com/oauth/authorize");url.search=new URLSearchParams({force_reauth:"true",client_id:config.appId,redirect_uri:config.redirectUri,response_type:"code",scope:"instagram_business_basic,instagram_business_content_publish",state}).toString();return sendJson(res,200,{url:url.href})}catch(error){return sendJson(res,error.status||500,{error:error.message||"Instagram connection could not start"})}
   }
   if (pathname === "/api/reseller/social/instagram/callback" && req.method === "GET") return completeInstagramOAuth(res,requestUrl);
-  if (pathname === "/api/reseller/social/instagram/callback" && req.method === "GET") {
-    try{const config=instagramOAuthConfig(),state=verifyInstagramState(requestUrl.searchParams.get("state")),code=String(requestUrl.searchParams.get("code")||"").replace(/#_$/,"");if(!code)throw Object.assign(new Error(requestUrl.searchParams.get("error_description")||"Instagram did not authorize this connection"),{status:400});const workspaceRows=await supabase.adminListWorkspaces(),workspace=workspaceRows.find(item=>item.id===state.workspaceId);if(!workspace)throw Object.assign(new Error("Workspace not found"),{status:404});const tokenResponse=await fetch("https://api.instagram.com/oauth/access_token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({client_id:config.appId,client_secret:config.appSecret,grant_type:"authorization_code",redirect_uri:config.redirectUri,code})}),shortToken=await tokenResponse.json();if(!tokenResponse.ok||!shortToken.access_token)throw new Error(shortToken?.error_message||shortToken?.error?.message||"Instagram rejected the authorization code");const longResponse=await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({grant_type:"ig_exchange_token",client_secret:config.appSecret,access_token:shortToken.access_token})}`),longToken=await longResponse.json(),accessToken=longResponse.ok&&longToken.access_token?longToken.access_token:shortToken.access_token,identityResponse=await fetch(`https://graph.instagram.com/${config.graphVersion}/me?fields=user_id,username`,{headers:{Authorization:`Bearer ${accessToken}`}}),identity=await identityResponse.json();if(!identityResponse.ok)throw new Error(identity?.error?.message||"Instagram account details could not be verified");const accountId=String(identity.user_id||identity.id||shortToken.user_id||"");if(!accountId)throw new Error("Instagram did not return a professional account ID");const expiresIn=Number(longToken.expires_in||0),encrypted=encryptSocialToken(accessToken);await supabase.upsertSocialConnection({user_id:state.userId,workspace_id:state.workspaceId,provider:"instagram",account_id:accountId,username:String(identity.username||"instagram account").replace(/^@/,"").toLowerCase(),...encrypted,scopes:["instagram_business_basic","instagram_business_content_publish"],expires_at:expiresIn?new Date(Date.now()+expiresIn*1000).toISOString():null});res.writeHead(302,{Location:`/reseller-studio?view=content&instagram=connected`});return res.end()}catch(error){res.writeHead(302,{Location:`/reseller-studio?view=content&instagram=error&message=${encodeURIComponent(String(error.message||"Connection failed").slice(0,160))}`});return res.end()}
-  }
   if (pathname === "/api/reseller/social/instagram/disconnect" && req.method === "POST") {
     try{const user=await supabase.verifyUser(req),input=await readBody(req),workspaceId=String(input.workspaceId||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return sendJson(res,404,{error:"Workspace not found"});await supabase.deleteSocialConnection(user.id,workspaceId,"instagram");return sendJson(res,200,{disconnected:true})}catch(error){return sendJson(res,error.status||500,{error:error.message||"Instagram could not be disconnected"})}
   }
@@ -534,7 +553,7 @@ app.use(async (req, res) => {
   if (pathname === "/api/cron/reseller-campaigns" && req.method === "GET") {
     try {
       if(!process.env.CRON_SECRET||String(req.headers.authorization||"")!==`Bearer ${process.env.CRON_SECRET}`)return sendJson(res,401,{error:"Unauthorized"});
-      const now=new Date(),workspaces=await supabase.adminListWorkspaces(),results=[];
+      const now=new Date(),workspaces=await supabase.adminListAutomatedWorkspaces(),results=[];
       for(const workspace of workspaces){const studio=workspace.state?.resellerStudio||{},automation=studio.campaignAutomation||{};if(!automation.enabled||!automation.nextRunAt||new Date(automation.nextRunAt)>now)continue;const inventory=Array.isArray(studio.inventory)?studio.inventory.filter(product=>product.status!=="draft"&&Number(product.quantity)>0):[];if(!inventory.length){results.push({workspaceId:workspace.id,status:"skipped",reason:"No prepared products"});continue}const sequence=Number(automation.sequence||0),product=inventory[sequence%inventory.length],campaign=scheduledCampaign(product,sequence),nextAutomation={...automation,approvalRequired:true,lastPreparedAt:now.toISOString(),nextRunAt:nextCampaignRun(now),sequence:sequence+1};const state={...(workspace.state||{}),resellerStudio:{...studio,contentCampaigns:[campaign,...(studio.contentCampaigns||[])].slice(0,50),campaignAutomation:nextAutomation}};await supabase.adminSaveWorkspace(workspace.id,state);results.push({workspaceId:workspace.id,status:"prepared",campaignId:campaign.id,productId:product.id})}
       return sendJson(res,200,{ok:true,checked:workspaces.length,results});
     }catch(error){return sendJson(res,error.status||500,{error:error.message||"Scheduled campaigns could not be prepared"});}
@@ -576,12 +595,13 @@ app.use(async (req, res) => {
   }
   if (pathname === "/api/reseller/listings" && req.method === "POST") {
     try {
-      if(rateLimited(req,"reseller-listings",20))return sendJson(res,429,{error:"The Listing Agent reached its hourly preparation limit"});
+      if(await rateLimited(req,"reseller-listings",20))return sendJson(res,429,{error:"The Listing Agent reached its hourly preparation limit"});
       const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),products=Array.isArray(input.products)?input.products.slice(0,5):[];
       if(!workspaceId||!products.length)return sendJson(res,400,{error:"Choose at least one product to prepare"});
       if(products.some(product=>!String(product.name||"").trim()||!String(product.category||"").trim()||String(product.description||"").trim().length<10))return sendJson(res,400,{error:"Every product needs a name, category, and verified details"});
       const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);
       const results=await Promise.all(products.map(product=>router.generateResellerListing({product:{name:String(product.name).slice(0,100),sku:String(product.sku||"").slice(0,40),category:String(product.category).slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description).slice(0,1200)},userId:user?.id,workspaceId})));
+      await usageLedger.record(results.map(result=>result.contribution),{workspaceId,userId:user?.id,operation:"reseller-listing"});
       return sendJson(res,200,{listings:results});
     }catch(error){return sendJson(res,error.status||502,{error:error.message})}
   }
@@ -654,13 +674,14 @@ app.use(async (req, res) => {
   }
   if (pathname === "/api/reseller/campaign-copilot" && req.method === "POST") {
     try {
-      if(rateLimited(req,"reseller-campaign-copilot",20))return sendJson(res,429,{error:"Campaign Copilot reached its hourly preparation limit"});
+      if(await rateLimited(req,"reseller-campaign-copilot",20))return sendJson(res,429,{error:"Campaign Copilot reached its hourly preparation limit"});
       const user=supabase.configured()?await supabase.verifyUser(req):null,input=await readBody(req),workspaceId=String(input.workspaceId||"").trim(),productId=String(input.productId||"").trim(),goal=String(input.goal||"").trim().slice(0,500),audience=String(input.audience||"").trim().slice(0,160),tone=String(input.tone||"polished").trim().slice(0,40),callToAction=String(input.callToAction||"").trim().slice(0,160),instructions=String(input.instructions||"").trim().slice(0,500),platforms=Array.isArray(input.platforms)?input.platforms.filter(value=>["instagram","facebook","x"].includes(value)).slice(0,3):[],preferredStyle=["editorial","minimal","sale"].includes(input.preferredStyle)?input.preferredStyle:"editorial",workspace=supabase.configured()?await supabase.getWorkspace(req,workspaceId):database.getWorkspace(workspaceId);
       if(!workspace)return sendJson(res,404,{error:"Workspace not found"});
       const studio=workspace.state?.resellerStudio||{},product=(studio.inventory||[]).find(item=>item.id===productId&&item.status!=="draft");
       if(!product)return sendJson(res,400,{error:"Choose a product with a prepared listing"});if(!goal)return sendJson(res,400,{error:"Tell Campaign Copilot what this campaign should accomplish"});if(!platforms.length)return sendJson(res,400,{error:"Choose at least one social channel"});
       const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));await enforceAiBudget(req,workspaceId,access.tokenCeiling);
       const result=await router.generateResellerCampaign({goal,audience,tone,callToAction,instructions,platforms,preferredStyle,product:{name:String(product.name||"").slice(0,100),category:String(product.category||"").slice(0,60),price:Math.max(0,Number(product.price)||0),quantity:Math.max(0,Math.floor(Number(product.quantity)||0)),condition:String(product.condition||"").slice(0,40),channel:String(product.channel||"").slice(0,60),description:String(product.description||"").slice(0,1200)},userId:user?.id,workspaceId}),draft=result.campaign;
+      await usageLedger.record(result.contribution,{workspaceId,userId:user?.id,operation:"reseller-campaign"});
       const captionBase=String(draft.caption||"").trim(),draftCta=String(draft.callToAction||"").trim(),caption=captionBase.toLowerCase().includes(draftCta.toLowerCase())?captionBase:`${captionBase} ${draftCta}`.trim();
       const campaign={id:crypto.randomUUID(),productId:product.id,checkoutUrl:String(product.checkoutUrl||"").slice(0,1000),product:{name:product.name,category:product.category,condition:product.condition,channel:product.channel,price:product.price,description:product.description,checkoutUrl:String(product.checkoutUrl||"").slice(0,1000)},brief:{goal,audience,tone,callToAction,instructions},goal,message:String(draft.message||draft.headline||goal).slice(0,240),headline:String(draft.headline||"").slice(0,100),caption:caption.slice(0,500),callToAction:draftCta.slice(0,160),platforms,style:preferredStyle,status:"draft",approvalRequired:true,createdBy:"campaign-copilot",createdAt:new Date().toISOString(),receipts:[],reviewWarnings:Array.isArray(draft.reviewWarnings)?draft.reviewWarnings.slice(0,4):[],contribution:result.contribution,warnings:result.warnings};
       const state={...(workspace.state||{}),resellerStudio:{...studio,contentCampaigns:[campaign,...(studio.contentCampaigns||[])].slice(0,50)}};if(supabase.configured())await supabase.saveWorkspace(req,workspaceId,state);else database.saveWorkspace(workspaceId,state);
@@ -675,6 +696,7 @@ app.use(async (req, res) => {
       value.executionProofs=(existing.state?.executionProofs||[]).filter(proof=>execution.validReceipt(workspaceId,proof,receiptSecret()));
       value.durableMissions=existing.state?.durableMissions||[];
       value.toolPermissions=toolPermissions.normalizePermissions(existing.state?.toolPermissions);
+      value.aiUsage=preserveUsage(existing.state?.aiUsage,value.aiUsage);
       const raw = supabase.configured() ? await supabase.saveWorkspace(req, workspaceId, value) : database.saveWorkspace(workspaceId, value);
       const workspace = raw && supabase.configured() ? { id: raw.id, name: raw.name, state: raw.state, createdAt: raw.created_at, updatedAt: raw.updated_at } : raw;
       return workspace ? sendJson(res, 200, workspace) : sendJson(res, 404, { error: "Workspace not found" });
@@ -689,31 +711,32 @@ app.use(async (req, res) => {
       const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));
       await enforceAiBudget(req,input.workspaceId,access.tokenCeiling);
       input.userId=user?.id;
-      return sendJson(res, 200, await generateWithOpenAI(input));
+      const result=await generateWithOpenAI(input);
+      await usageLedger.record(result.contributions,{workspaceId:input.workspaceId,userId:user?.id,operation:"strategy"});
+      return sendJson(res, 200, result);
     } catch (error) { return sendJson(res, error.status||502, { error: error.message }); }
   }
   if (pathname === "/api/workforce/run" && req.method === "POST") {
     try {
-      if (rateLimited(req, "workforce", 12)) return sendJson(res, 429, { error: "The workforce has reached its hourly assignment limit" });
+      if (await rateLimited(req, "workforce", 12)) return sendJson(res, 429, { error: "The workforce has reached its hourly assignment limit" });
       const user = supabase.configured() ? await supabase.verifyUser(req) : null;
       const input = await readBody(req), goal = String(input.goal || "").trim().slice(0, 1200);
       if (goal.length < 12) return sendJson(res, 400, { error: "Give the team a more specific objective" });
       const access=entitlements.assertGenerationAccess(await accountEntitlement(req,user));
       await enforceAiBudget(req,input.workspaceId,access.tokenCeiling);
       const value = { goal, department:String(input.department || "company").slice(0,30),priority:String(input.priority || "normal").slice(0,20),company:String(input.company || "Nova venture").slice(0,100),context:input.context && typeof input.context === "object" ? input.context : null,userId:user?.id,workspaceId:String(input.workspaceId||"").slice(0,80) };
-      return sendJson(res, 200, { run:await runWorkforce(value) });
+      const run=await runWorkforce(value);
+      await usageLedger.record(run.contributions,{workspaceId:value.workspaceId,userId:user?.id,operation:"workforce"});
+      return sendJson(res, 200, { run });
     } catch (error) { return sendJson(res, error.status || 502, { error:error.message }); }
   }
   const asset = staticFiles.get(pathname);
   if (!asset) return res.writeHead(404).end("Not found");
-  const extension = path.extname(asset[0]);
-  const cacheControl = [".html", ".js", ".css"].includes(extension)
-    ? "no-cache"
-    : extension === ".png"
-      ? "public, max-age=86400, stale-while-revalidate=604800"
-      : "public, max-age=300, stale-while-revalidate=86400";
-  res.writeHead(200, { "Content-Type": types[extension] || "application/octet-stream", "Cache-Control": cacheControl });
-  res.end(asset[1]);
+  const extension = path.extname(asset[0]), body = assetBody(asset), etag = assetEtag(pathname, body);
+  const headers = { "Content-Type": types[extension] || "application/octet-stream", "Cache-Control": assetCacheControl(extension, pathname), ETag: etag };
+  if (String(req.headers["if-none-match"] || "").split(",").map(value => value.trim()).includes(etag)) return res.writeHead(304, headers).end();
+  res.writeHead(200, headers);
+  res.end(body);
 });
 
 module.exports = app;

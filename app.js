@@ -143,11 +143,23 @@ $("exportWorkspace").onclick=()=>{
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),link=document.createElement("a");
   link.href=url;link.download=`nova-ai-${currentWorkspaceName.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"workspace"}-backup.json`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Workspace backup downloaded");
 };
+// The overview's Live Operations card reports real execution tasks only.
+function renderOperationsPreview(openTasks){
+  const rows=document.querySelectorAll("[data-ops-department]");
+  rows.forEach(row=>{
+    const department=row.dataset.opsDepartment,tasks=openTasks.filter(task=>String(task.department||"").toLowerCase().includes(department)),working=tasks.find(task=>task.status==="in_progress"),blocked=tasks.find(task=>task.status==="blocked");
+    row.querySelector("strong").textContent=working?String(working.title||"").slice(0,60):blocked?String(blocked.title||"").slice(0,60):tasks.length?`${tasks.length} task${tasks.length===1?"":"s"} queued`:"No assignment";
+    row.querySelector("em").textContent=working?"Working":blocked?"Blocked":tasks.length?"Queued":"Idle";
+  });
+  const footer=document.getElementById("opsPreviewCount");if(footer)footer.textContent=`${openTasks.length} open task${openTasks.length===1?"":"s"}`;
+}
 function render(){
   const p=state.plan;
   $("workspaceName").textContent=p?p.name:currentWorkspaceName;
-  $("health").textContent=p?(state.approved?"82":"68"):"—";
-  const executionTasks=state.executionTasks||[],openTasks=executionTasks.filter(task=>task.status!=="done"),blockedTasks=openTasks.filter(task=>task.status==="blocked");$("agentCount").textContent=p?"3":"0";$("taskCount").textContent=String(openTasks.length);$("taskSummary").textContent=blockedTasks.length?`${blockedTasks.length} blocked · founder attention needed`:openTasks.length?`${openTasks.filter(task=>task.status==="in_progress").length} in progress`:"Nothing awaiting execution";
+  // Health is the plan's measured evaluation score, not a fixed number.
+  const planScore=Number(state.evaluation?.score);$("health").textContent=p&&Number.isFinite(planScore)?String(planScore):"—";
+  const executionTasks=state.executionTasks||[],openTasks=executionTasks.filter(task=>task.status!=="done"),blockedTasks=openTasks.filter(task=>task.status==="blocked"),activeOwners=new Set(openTasks.filter(task=>task.status==="in_progress").map(task=>task.owner));$("agentCount").textContent=String(activeOwners.size);
+  renderOperationsPreview(openTasks);$("taskCount").textContent=String(openTasks.length);$("taskSummary").textContent=blockedTasks.length?`${blockedTasks.length} blocked · founder attention needed`:openTasks.length?`${openTasks.filter(task=>task.status==="in_progress").length} in progress`:"Nothing awaiting execution";
   const aiUsage=state.aiUsage||{};$("aiUsageTotal").textContent=Number(aiUsage.totalTokens||0).toLocaleString();$("aiUsageMode").textContent=aiUsage.liveGenerations?`${aiUsage.liveGenerations} live generation${aiUsage.liveGenerations===1?"":"s"} · tokens`:aiUsage.fallbackGenerations?`${aiUsage.fallbackGenerations} safe fallback run${aiUsage.fallbackGenerations===1?"":"s"}`:"No generations yet";
   renderSettingsSummary();
   renderUsage();
@@ -261,7 +273,10 @@ function renderWorkforce(){
   if(!run){container.className="workforce-empty";container.innerHTML="<b>No assignment running</b><span>Your employees’ work and handoffs will appear here.</span>";$("workforceStatus").textContent="Ready";return;}
   container.className="employee-results";$("workforceStatus").textContent=run.approvalStatus==="approved"?"Approved":run.approvalStatus==="changes_requested"?"Revise":run.needsApproval?"Founder review":"Complete";
   const review=run.review,reviewCard=review?`<section class="agent-review ${review.ready?"ready":"blocked"}"><header><div><small>INDEPENDENT REVIEW</small><h4>${escapeHtml(review.verdict)}</h4></div><strong>${Number(review.score||0)}<em>/100</em></strong></header><div><span>${review.ready?"✓ Ready for founder review":"○ Resolve blockers before approval"}</span><p>${escapeHtml(review.recommendation)}</p></div>${(review.blockers||[]).length?`<ul>${review.blockers.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul>`:""}</section>`:"";
-  container.innerHTML=`<div class="run-summary"><small>${escapeHtml(run.department||"company")} · ${escapeHtml(run.priority||"normal")} priority</small><strong>${escapeHtml(run.goal)}</strong><p>${escapeHtml(run.summary)}</p>${run.approvalStatus==="approved"?'<span class="approved">✓ Founder approved</span>':run.approvalStatus==="changes_requested"?'<span>↻ Changes requested</span>':run.needsApproval?'<span>◉ External actions require your approval</span>':''}</div><div class="employee-list">${(run.employees||[]).map((employee,index)=>`<article><i>${index+1}</i><div><small>${escapeHtml(employee.department)}</small><h4>${escapeHtml(employee.role)}</h4><p>${escapeHtml(employee.deliverable)}</p><footer><b>HANDOFF</b> ${escapeHtml(employee.handoff)}</footer></div><span>✓ Done</span></article>`).join("")}</div>${reviewCard}`;
+  // Deliverables are drafts until a task is executed and its evidence verified;
+  // demo-engine output is a template, not AI-generated work.
+  const templated=(run.contributions||[run.contribution]).filter(Boolean).every(item=>item.model==="Demo engine"),deliverableLabel=templated?"Template draft":"✎ Drafted";
+  container.innerHTML=`<div class="run-summary"><small>${escapeHtml(run.department||"company")} · ${escapeHtml(run.priority||"normal")} priority</small><strong>${escapeHtml(run.goal)}</strong><p>${escapeHtml(run.summary)}</p>${run.approvalStatus==="approved"?'<span class="approved">✓ Founder approved</span>':run.approvalStatus==="changes_requested"?'<span>↻ Changes requested</span>':run.needsApproval?'<span>◉ External actions require your approval</span>':''}</div><div class="employee-list">${(run.employees||[]).map((employee,index)=>`<article><i>${index+1}</i><div><small>${escapeHtml(employee.department)}</small><h4>${escapeHtml(employee.role)}</h4><p>${escapeHtml(employee.deliverable)}</p><footer><b>HANDOFF</b> ${escapeHtml(employee.handoff)}</footer></div><span>${deliverableLabel}</span></article>`).join("")}</div>${reviewCard}`;
 }
 function renderWorkQueue(){
   const queue=state.workQueue||[],container=$("workQueue");if(!container)return;$("workQueueCount").textContent=`${queue.length} queued`;
@@ -348,7 +363,7 @@ $("ideaForm").onsubmit=async(event)=>{
     const response=await authFetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idea,customer,revenue,goal,budget,companyMemory:companyMemoryContext(),workspaceId:currentWorkspaceId})});
     const result=await response.json();if(!response.ok)throw new Error(result.error||"Generation failed");
     const activities=(result.contributions||[]).map(item=>({title:`${item.role} completed work`,detail:`${item.provider} · ${item.model}`}));
-    state={approved:false,activities:activities.length?activities:[{title:"Founder Agent completed strategy",detail:`Created the initial ${goal.toLowerCase()} plan.`}],plan:result.plan,evaluation:result.evaluation,brief:{idea,customer,revenue,goal,budget},companyMemory:state.companyMemory||null,revisions:0,aiUsage:{inputTokens:0,outputTokens:0,totalTokens:0,generations:0,liveGenerations:0,fallbackGenerations:0,events:[]}};(result.contributions||[]).forEach(item=>recordUsage(item,"strategy"));
+    state={approved:false,activities:activities.length?activities:[{title:"Founder Agent completed strategy",detail:`Created the initial ${goal.toLowerCase()} plan.`}],plan:result.plan,evaluation:result.evaluation,brief:{idea,customer,revenue,goal,budget},companyMemory:state.companyMemory||null,revisions:0,aiUsage:state.aiUsage||{inputTokens:0,outputTokens:0,totalTokens:0,generations:0,liveGenerations:0,fallbackGenerations:0,events:[]},aiBudget:state.aiBudget};(result.contributions||[]).forEach(item=>recordUsage(item,"strategy"));
     await save();render();show("approvals");toast("Strategy and independent review complete");
   }catch(error){toast(error.message)}finally{$("generateBtn").disabled=false;$("generateBtn").innerHTML="Generate launch strategy <span>→</span>";}
 };
