@@ -27,7 +27,55 @@ db.exec(`
     created_at TEXT NOT NULL,
     PRIMARY KEY (workspace_id, generation_id)
   );
+  CREATE TABLE IF NOT EXISTS missions (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    user_id TEXT,
+    company TEXT NOT NULL,
+    objective TEXT NOT NULL,
+    status TEXT NOT NULL,
+    resume_status TEXT,
+    steps_json TEXT NOT NULL,
+    decision_json TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 `);
+
+// Local-development mission store with the same contract as supabase.js.
+function missionRow(row) {
+  if (!row) return null;
+  const { steps_json: steps, decision_json: decision, ...rest } = row;
+  return { ...rest, steps: JSON.parse(steps || "[]"), decision: decision ? JSON.parse(decision) : null };
+}
+const MISSION_COLUMNS = ["user_id", "company", "objective", "status", "resume_status", "error", "attempts", "locked_until", "created_at", "updated_at"];
+const missionStore = {
+  insert(row) {
+    const id = randomUUID();
+    db.prepare("INSERT INTO missions (id, workspace_id, user_id, company, objective, status, steps_json, attempts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(id, row.workspace_id, row.user_id ?? null, row.company, row.objective, row.status, JSON.stringify(row.steps || []), row.attempts || 0, row.created_at, row.updated_at);
+    return missionStore.get(id);
+  },
+  get: id => missionRow(db.prepare("SELECT * FROM missions WHERE id = ?").get(id)),
+  list: workspaceId => db.prepare("SELECT * FROM missions WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 30").all(workspaceId).map(missionRow),
+  listActive: () => db.prepare("SELECT * FROM missions WHERE status IN ('running', 'executing') ORDER BY updated_at LIMIT 50").all().map(missionRow),
+  claim(id, leaseMs) {
+    const now = new Date().toISOString(), until = new Date(Date.now() + leaseMs).toISOString();
+    const result = db.prepare("UPDATE missions SET locked_until = ? WHERE id = ? AND (locked_until IS NULL OR locked_until < ?)").run(until, id, now);
+    return Number(result.changes) ? missionStore.get(id) : null;
+  },
+  update(id, values) {
+    const sets = [], params = [];
+    for (const [key, value] of Object.entries(values)) {
+      if (key === "steps") { sets.push("steps_json = ?"); params.push(JSON.stringify(value)); }
+      else if (key === "decision") { sets.push("decision_json = ?"); params.push(JSON.stringify(value)); }
+      else if (MISSION_COLUMNS.includes(key)) { sets.push(`${key} = ?`); params.push(value ?? null); }
+    }
+    if (sets.length) db.prepare(`UPDATE missions SET ${sets.join(", ")} WHERE id = ?`).run(...params, id);
+  }
+};
 
 const emptyState = () => ({ plan: null, approved: false, activities: [], evaluation: null });
 
@@ -88,4 +136,4 @@ function workspaceAiTokens(workspaceId) {
   return Number(db.prepare("SELECT COALESCE(SUM(total_tokens), 0) AS total FROM ai_usage_events WHERE workspace_id = ?").get(workspaceId).total);
 }
 
-module.exports = { ensureDefaultWorkspace, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, insertAiUsage, workspaceAiTokens };
+module.exports = { ensureDefaultWorkspace, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, insertAiUsage, workspaceAiTokens, missionStore };

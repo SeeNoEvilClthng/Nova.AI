@@ -59,26 +59,4 @@ async function runMissionStage(stage, input, priorSteps = []) {
   };
 }
 
-// Copies step results onto the mission record so the founder can read the
-// drafted work before approving it. Throws when the record is not saved yet
-// so the workflow runtime retries the step.
-async function saveMissionProgress(input, steps, stage) {
-  const store = storeFor();
-  const workspace = await store.get(input.workspaceId);
-  const missions = Array.isArray(workspace?.state?.durableMissions) ? workspace.state.durableMissions : [];
-  const mission = missions.find(item => item.id === input.missionId);
-  if (!mission) throw new Error(`Mission ${input.missionId} is not recorded yet`);
-  mission.steps = steps.map(step => ({ agent: step.agent, status: step.status, output: step.output, details: step.details || null, model: step.contribution?.model || null }));
-  mission.stage = stage;
-  mission.updatedAt = new Date().toISOString();
-  await store.save(input.workspaceId, { ...workspace.state, durableMissions: missions });
-  return true;
-}
-
-function storeFor() {
-  const supabase = require("./supabase"), database = require("./database");
-  if (supabase.configured()) return { get: id => supabase.adminGetWorkspace(id, "id,state"), save: (id, state) => supabase.adminSaveWorkspace(id, state) };
-  return { get: id => database.getWorkspace(id), save: (id, state) => database.saveWorkspace(id, state) };
-}
-
-module.exports = { runMissionStage, saveMissionProgress, stages };
+module.exports = { runMissionStage, stages };
