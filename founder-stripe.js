@@ -128,6 +128,8 @@ function orderFromSession(session, { workspaceId, offerId, mode }) {
     refunded_minor: Number(charge && typeof charge === "object" ? charge.amount_refunded || 0 : 0),
     currency: String(session.currency || "usd").toUpperCase(),
     customer_email: String(session.customer_details?.email || "").slice(0, 254) || null,
+    // Visitor ID the launch page added to the checkout link (attribution).
+    client_reference_id: /^[A-Za-z0-9_-]{8,64}$/.test(String(session.client_reference_id || "")) ? session.client_reference_id : null,
     paid_at: new Date(Number(session.created || 0) * 1000).toISOString()
   };
 }

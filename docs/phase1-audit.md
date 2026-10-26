@@ -192,16 +192,40 @@ That release changed three things at once:
 
 The re-release removes the first two and guards the third. If it fails again, the site stays up and `/api/health` shows the error.
 
-**Needs configuration:** run `20261029_operator_runs.sql`. Scheduled cycles use the existing daily cron and `CRON_SECRET`.
+**Phase 3 configuration:** run `20261029_operator_runs.sql`. Scheduled cycles use the existing daily cron and `CRON_SECRET`.
+
+## Phase 5 (2026-10-31): Growth — attribution and approved lead follow-up
+
+**Attribution:**
+- Published launch pages keep a random visitor ID and the first UTM tags / referring site they saw. No cookies and no personal data.
+- These are sent with page views and signups.
+- The visitor ID is added to Stripe Buy links as `client_reference_id`, so each synced paid order is credited to the source that first brought the buyer.
+
+**Follow-up:**
+- A Sales agent drafts a short, honest follow-up to new signups. The founder edits it, then confirms the exact subject and recipient count before sending.
+- Messages go through Resend. Each one states why the person is receiving it, has a signed one-click unsubscribe link (with `List-Unsubscribe` headers), and sets replies to go to the founder.
+- Unsubscribed and already-contacted leads are skipped. Limits: 50 per batch, 100 per company per day. Every send is logged.
+
+| File | Change |
+|---|---|
+| `attribution.js` (new) | Cleans UTM tags, visitor IDs and referrer hosts; first-touch source summary across views, signups and orders. |
+| `email-outreach.js` (new) | Signed unsubscribe tokens, draft validation (strips header injection from subjects), message footer, Resend client with idempotency keys, batch limits, template fallback. |
+| `growth-routes.js` (new) | `GET /api/growth/summary`, `POST /api/growth/followup/draft`, `POST /api/growth/followup/send` (signed in, confirmation required, rate limited), and the public `/u/<token>` unsubscribe page. GET only shows a button, so link scanners can't unsubscribe anyone; POST unsubscribes. Loaded behind the startup guard. |
+| `server.js` | Public page script records first touch and tags Buy links; the view and signup endpoints store attribution. Mounts the growth routes. |
+| `supabase.js` | Attribution, outreach and unsubscribe queries. Writes **fall back without the new columns** until the migration runs, so views, signups and revenue sync keep working. |
+| `founder-stripe.js` | Synced orders keep `client_reference_id`. |
+| `growth-panel.js`, `growth.css`, `index.html` | Launch Studio Growth panel: sources table (visitors, signups, signup rate, paid orders, net revenue), UTM tip, Draft follow-up, Copy, Review and send. |
+| `supabase/migrations/20261031_growth.sql` | Attribution columns on page events, leads and orders; `unsubscribed_at`/`last_contacted_at` on leads; `nova_email_sends` (owners can read; only the server can write). |
+| `phase6.test.js` | 9 new tests (81 total). |
+
+**Needs configuration:**
+1. Run `20261031_growth.sql`.
+2. To send from Nova, create a Resend account, verify a sending domain, and set `RESEND_API_KEY` and `NOVA_EMAIL_FROM` (for example `Acme <hello@yourdomain.com>`). Without them, drafting and Copy still work.
 
 ## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
-0. ~~(E) Operating modes with audit log, caps and emergency pause~~: done in Phase 3.
-
-## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
-1. ~~(A) Shared rate limiting and anonymous-write lockdown~~ and ~~(A) Bundle the front-end~~: done in 1b. ~~(B) Model routing~~ and ~~(C) Business-to-revenue path~~: done in Phase 2 (see above for gaps).
-2. **(A) Minify the bundles** (whitespace and syntax only, since the classic scripts share globals) and move images to the Vercel CDN `public/` path.
-3. **(B) Move missions and tasks out of the JSONB blob** into `nova_missions`/`nova_tasks` tables with explicit states (planned → queued → executing → awaiting_approval → blocked/failed → verified), idempotency keys and a dead-letter view. Run workforce generation as a durable workflow and stream progress to the UI.
-4. **(B) Model routing.** Use a cheap model for listings and captions, and a reasoning model for strategy and review, with per-tenant cost from the ledger and p50/p95 dashboards from `latency_ms`.
-5. **(C) One complete business-to-revenue path (services or digital product).** Intake → plan → offer → published landing page with a Stripe Payment Link on the founder's own Stripe Connect account → webhook-verified orders feeding a "verified revenue" ledger kept separate from platform billing.
-6. **(D) Growth.** Consent-based email (Resend) with unsubscribe, CRM pipeline on top of `nova_page_leads`, UTM attribution.
-7. **(E) Operating modes** (Copilot / Supervised / Autopilot) built on `tool-permissions.js`, with per-action limits, spend caps, an audit log and an emergency pause.
+Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5).
+1. **Webhook-driven revenue.** Stripe webhooks from each founder's account for instant order and refund updates; currently orders sync daily and on the Sync button.
+2. **Execute approved actions.** Let approved operator and mission actions call connected tools (Instagram publishing, lead follow-up, offer changes), with per-action permission, evidence and verification.
+3. **Port the remaining unreachable routes** (GitHub verify, X/Meta publishing) from `src/index.ts` into `server.js`, then remove `src/index.ts` behind a preview check.
+4. **A/B testing** of launch-page headlines with sample-size-aware results.
+5. **Minify the bundles** and move images to the Vercel CDN `public/` path.

@@ -187,12 +187,55 @@ async function unpublishPage(req, workspaceId) {
 // Visitor writes go through the server (rate limited, optionally CAPTCHA
 // checked) with the service role; anonymous Data API inserts are revoked so
 // they cannot bypass those checks.
-async function captureLead(pageId, email) {
-  return adminRequest("/rest/v1/nova_page_leads", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ page_id:pageId, email }) });
+// Attribution and outreach columns arrive with a migration. Until it has run,
+// writes retry without the optional fields, so deploying the code first never
+// stops views, signups or revenue sync from being recorded.
+const missingColumn = error => error.status === 400 && /column|PGRST204/i.test(error.message);
+async function writeWithOptionalFields(path, options, rows, optionalKeys) {
+  try { return await adminRequest(path, { ...options, body: JSON.stringify(rows) }); }
+  catch (error) {
+    if (!missingColumn(error)) throw error;
+    const strip = row => Object.fromEntries(Object.entries(row).filter(([key]) => !optionalKeys.includes(key)));
+    return adminRequest(path, { ...options, body: JSON.stringify(Array.isArray(rows) ? rows.map(strip) : strip(rows)) });
+  }
+}
+const ATTRIBUTION_KEYS = ["visitor_id", "utm_source", "utm_medium", "utm_campaign", "referrer_host"];
+
+async function captureLead(pageId, email, attribution = {}) {
+  return writeWithOptionalFields("/rest/v1/nova_page_leads", { method:"POST", headers:{ Prefer:"return=minimal" } }, { page_id:pageId, email, ...attribution }, ATTRIBUTION_KEYS);
 }
 
-async function recordPageEvent(pageId, eventType) {
-  return adminRequest("/rest/v1/nova_page_events", { method:"POST", headers:{ Prefer:"return=minimal" }, body:JSON.stringify({ page_id:pageId, event_type:eventType }) });
+async function recordPageEvent(pageId, eventType, attribution = {}) {
+  return writeWithOptionalFields("/rest/v1/nova_page_events", { method:"POST", headers:{ Prefer:"return=minimal" } }, { page_id:pageId, event_type:eventType, ...attribution }, ATTRIBUTION_KEYS);
+}
+
+// Growth: attribution reads for the owner (RLS) and server-only outreach writes.
+async function listPageEventsForGrowth(req, pageId) {
+  return request(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(pageId)}&select=event_type,visitor_id,utm_source,utm_medium,utm_campaign,referrer_host,created_at&order=created_at.desc&limit=5000`, req);
+}
+async function listLeadsForGrowth(req, pageId) {
+  return request(`/rest/v1/nova_page_leads?page_id=eq.${encodeURIComponent(pageId)}&select=id,email,status,utm_source,referrer_host,unsubscribed_at,last_contacted_at,created_at&order=created_at.desc&limit=1000`, req);
+}
+async function listOrdersForGrowth(req, workspaceId) {
+  return request(`/rest/v1/nova_orders?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=amount_minor,refunded_minor,currency,client_reference_id,paid_at&limit=1000`, req);
+}
+async function adminOutreachLeads(pageId) {
+  return adminRequest(`/rest/v1/nova_page_leads?page_id=eq.${encodeURIComponent(pageId)}&status=eq.new&unsubscribed_at=is.null&select=id,email&order=created_at.asc&limit=500`);
+}
+async function adminCountEmailSendsSince(workspaceId, since) {
+  return adminCount(`/rest/v1/nova_email_sends?workspace_id=eq.${encodeURIComponent(workspaceId)}&created_at=gte.${encodeURIComponent(since)}&select=id`);
+}
+async function insertEmailSends(rows) {
+  return adminRequest("/rest/v1/nova_email_sends", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(rows) });
+}
+async function markLeadsContacted(ids) {
+  if (!ids.length) return null;
+  const now = new Date().toISOString();
+  return adminRequest(`/rest/v1/nova_page_leads?id=in.(${ids.map(encodeURIComponent).join(",")})&status=eq.new`, { method: "PATCH", body: JSON.stringify({ status: "contacted", last_contacted_at: now, updated_at: now }) });
+}
+async function unsubscribeLead(id) {
+  const now = new Date().toISOString();
+  return adminRequest(`/rest/v1/nova_page_leads?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ unsubscribed_at: now, updated_at: now }) });
 }
 
 // Returns true when the caller is over the limit.
@@ -373,7 +416,7 @@ async function listPaymentConnections() {
 }
 
 async function upsertOrders(rows) {
-  return adminRequest("/rest/v1/nova_orders?on_conflict=provider,external_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(rows.map(row => ({ ...row, synced_at: new Date().toISOString() }))) });
+  return writeWithOptionalFields("/rest/v1/nova_orders?on_conflict=provider,external_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" } }, rows.map(row => ({ ...row, synced_at: new Date().toISOString() })), ["client_reference_id"]);
 }
 
 async function listOrders(req, workspaceId) {
@@ -385,4 +428,4 @@ async function countPageViews(req, workspaceId) {
   return page ? countRows(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(page.id)}&event_type=eq.view&select=id`, req) : 0;
 }
 
-module.exports = { insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
+module.exports = { listPageEventsForGrowth, listLeadsForGrowth, listOrdersForGrowth, adminOutreachLeads, adminCountEmailSendsSince, insertEmailSends, markLeadsContacted, unsubscribeLead, insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };

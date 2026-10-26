@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="durable-missions.css">
   <link rel="stylesheet" href="connections.css">
   <link rel="stylesheet" href="operator.css">
+  <link rel="stylesheet" href="growth.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -185,6 +186,18 @@
         <div class="publish-gate"><div><small>HUMAN APPROVAL REQUIRED</small><strong id="publishTitle">Draft not approved</strong><span>Publishing stays locked until you approve this exact draft.</span></div><button id="approveSite" class="primary">Approve launch page →</button></div>
         <div class="publish-console"><div><small>PUBLICATION</small><h3 id="publicPageStatus">Not published</h3><a id="publicPageLink" target="_blank" rel="noopener" hidden></a></div><div class="publish-stats"><span><b id="pageViews">0</b> visits</span><span><b id="pageSignups">0</b> signups</span><span><b id="pageConversion">0%</b> conversion</span></div><div class="publish-buttons"><button id="unpublishSite" class="secondary" hidden>Unpublish</button><button id="publishSite" class="primary">Publish page →</button></div></div>
         <article class="panel lead-inbox"><div class="panel-head"><div><small>EARLY-ACCESS LEADS</small><h3>Signup inbox</h3></div><div class="lead-tools"><label>Show<select id="leadFilter"><option value="all">All leads</option><option value="new">New</option><option value="contacted">Contacted</option><option value="qualified">Qualified</option><option value="archived">Archived</option></select></label><button id="exportLeads" class="secondary" type="button" disabled>Export CSV</button></div></div><div id="leadList" class="lead-list"><div class="lead-empty">Publish your page and share it to start collecting signups.</div></div></article>
+        <article class="panel growth-panel"><div class="panel-head"><div><small>GROWTH</small><h3>Where customers come from, and follow-up</h3></div><button id="refreshGrowth" class="secondary" type="button">Refresh</button></div>
+          <div id="growthSources" class="growth-empty">Publish your page to see traffic sources.</div>
+          <p class="growth-tip">Tag links you share with <code>?utm_source=…</code> (for example <code>?utm_source=instagram&amp;utm_campaign=launch</code>) to see which channels bring visitors, signups and paid orders.</p>
+          <div class="growth-followup"><div><small>LEAD FOLLOW-UP</small><strong id="followupAudience">No new leads to email</strong><span id="followupEmailState"></span></div>
+            <label>Notes for the Sales agent <span>optional</span><input id="followupNotes" maxlength="600" placeholder="Example: invite them to a 15-minute call this week"></label>
+            <button id="draftFollowup" class="secondary" type="button">✦ Draft follow-up</button>
+            <label>Subject<input id="followupSubject" maxlength="150"></label>
+            <label>Message<textarea id="followupBody" maxlength="3000" rows="8"></textarea></label>
+            <p class="growth-footer-note">Every email adds why the person is receiving it, a one-click unsubscribe link, and sets replies to go to you. Unsubscribed and already-contacted leads are skipped.</p>
+            <div class="growth-actions"><button id="copyFollowup" class="secondary" type="button">Copy</button><button id="sendFollowup" class="primary" type="button">Review and send →</button></div>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -387,5 +400,6 @@
   <script src="durable-missions.js"></script>
   <script src="connections.js"></script>
   <script src="operator-panel.js"></script>
+  <script src="growth-panel.js"></script>
 </body>
 </html>
