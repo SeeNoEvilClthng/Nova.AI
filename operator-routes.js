@@ -5,13 +5,7 @@ const supabase = require("./supabase");
 const operator = require("./operator-runtime");
 const { normalizeSettings } = require("./operator");
 const { assertCanGenerate } = require("./ai-access");
-
-// Keeps a background cycle running after the response on Vercel. Locally the
-// promise simply continues in the Node process.
-function runInBackground(promise) {
-  try { require("@vercel/functions").waitUntil(promise); } catch { /* not on Vercel */ }
-  promise.catch(error => console.error("Operator cycle failed:", error.message));
-}
+const { runInBackground } = require("./background");
 
 // A run still "running" after 15 minutes has died; show it as failed.
 const STALE_MS = 15 * 60_000;

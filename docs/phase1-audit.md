@@ -152,7 +152,45 @@ The cycle never publishes, messages anyone, spends money or changes prices. Exte
 | `supabase/migrations/20261029_operator_runs.sql` | `nova_operator_runs`: owners can read; only the server can write. |
 | `phase4.test.js` | 11 new tests (64 total). |
 
-**Production finding (pre-existing):** `vercel.json` deploys `server.js` directly, so **nothing in `src/index.ts` runs on Vercel**. That covers durable missions, tool connections and the Meta/X publish routes there; on the live site they all return 404, and that was already true before these changes. The operator was first built on Workflow DevKit inside `src/index.ts` and was moved into `server.js` because of this. Fixing durable missions means either deploying the Nitro build (changing `vercel.json`, which needs a preview check) or moving those routes into `server.js` too.
+**Production finding (pre-existing):** `vercel.json` deploys `server.js` directly, so **nothing in `src/index.ts` runs on Vercel**. That covers durable missions, tool connections and the Meta/X publish routes there; on the live site they all return 404, and that was already true before these changes. The operator was first built on Workflow DevKit inside `src/index.ts` and was moved into `server.js` because of this. Durable missions and tool connections were fixed in Phase 4 (below).
+
+## Phase 4 (2026-10-30): durable missions that work in production
+
+Missions are rebuilt as a saved state machine inside `server.js`:
+- `running` → strategy, research and build → `awaiting_approval`.
+- Approve → `executing` → prepare (not executed) and review → `completed`.
+- Reject → `rejected`.
+- Any stage failing 3 times → `failed`, which the founder can **Retry**.
+
+**How it stays reliable:**
+- Every step is saved the moment it finishes, so a crash or timeout resumes at the next unfinished step.
+- A 5-minute lease on each mission means only one server works on it at a time.
+- Steps keep running in the background after the response (Vercel `waitUntil`).
+- Missions that stall are picked up again when the list is next viewed, and by the daily cron.
+
+| File | Change |
+|---|---|
+| `missions.js` (new) | The state machine: start, advance (lease, per-step saves, retries), decide, retry, stall detection. |
+| `mission-routes.js` (new) | `/api/durable-missions` (start, list, decision, retry) and `/api/tool-connections` (list, permissions), now served by `server.js`. |
+| `background.js` (new) | Shared `waitUntil` helper, also used by the operator. |
+| `supabase.js` | `nova_missions` storage: insert, RLS list/get, lease claim, update, active list. |
+| `mission-store-local.js` (new), `database.js` | SQLite mission store for local development. It is loaded and its table created only on first use; `database.js` just exports its connection. |
+| `server.js` | Mounts the routes **behind a load guard**: if the missions module fails to load, only `/api/durable-missions` and `/api/tool-connections` return 503, and `/api/health` reports `"status":"degraded"` with the error. The cron also resumes stalled missions. |
+| `src/index.ts`, `workflows/nova-mission.ts` | Intentionally **left unchanged** (see the incident below). Their mission routes are now superseded by `server.js` and remain unreachable on Vercel, as before. |
+| `durable-missions.js` | Shows the stage, the retry reason, the failure reason and a Retry button. |
+| `supabase/migrations/20261030_missions.sql` | `nova_missions`: owners can read; only the server can write. |
+| `phase5.test.js` | 8 new tests (72 total), including a full start → approve → complete run over HTTP. |
+
+**Needs configuration:** run `20261030_missions.sql`.
+
+**Incident (2026-10-30):** the first release of this change (`3ec08c7`) made every request on the live site return HTTP 500, health check included. It was reverted within about 5 minutes (`9a3d866`). The same code loads and serves normally locally with production settings, so the failure is specific to Vercel's runtime; the exact error is only in the Vercel runtime logs, which need a dashboard login.
+
+That release changed three things at once:
+- `database.js` created a new table at startup.
+- The last Workflow DevKit file was deleted and `src/index.ts` edited.
+- New route modules were loaded unguarded.
+
+The re-release removes the first two and guards the third. If it fails again, the site stays up and `/api/health` shows the error.
 
 **Needs configuration:** run `20261029_operator_runs.sql`. Scheduled cycles use the existing daily cron and `CRON_SECRET`.
 

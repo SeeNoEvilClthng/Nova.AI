@@ -88,4 +88,6 @@ function workspaceAiTokens(workspaceId) {
   return Number(db.prepare("SELECT COALESCE(SUM(total_tokens), 0) AS total FROM ai_usage_events WHERE workspace_id = ?").get(workspaceId).total);
 }
 
-module.exports = { ensureDefaultWorkspace, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, insertAiUsage, workspaceAiTokens };
+// The connection is shared with optional local stores (mission-store-local.js)
+// so they can create their own tables lazily instead of at startup.
+module.exports = { db, ensureDefaultWorkspace, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, insertAiUsage, workspaceAiTokens };
