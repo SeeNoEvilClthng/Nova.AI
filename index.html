@@ -39,6 +39,7 @@
   <link rel="stylesheet" href="minimal-ui.css">
   <link rel="stylesheet" href="durable-missions.css">
   <link rel="stylesheet" href="connections.css">
+  <link rel="stylesheet" href="operator.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -270,6 +271,17 @@
 
     <section class="view" id="autopilot">
       <div class="section-intro autopilot-intro"><div><p class="eyebrow">VERIFIED EXECUTION ENGINE</p><h2>Work that proves it happened.</h2><p>Nova turns approved objectives into accountable execution, requires evidence, independently checks the result, and keeps risky actions behind founder approval.</p></div><span id="autopilotState">Founder supervised</span></div>
+      <section class="operator-panel panel" aria-labelledby="operatorTitle">
+        <div class="panel-head"><div><small>AUTONOMOUS OPERATOR</small><h3 id="operatorTitle">Nova reviews this company every day and tells you what to do next</h3></div><span id="operatorState">Loading…</span></div>
+        <div class="operator-modes" role="radiogroup" aria-label="Operating mode">
+          <label><input type="radio" name="operatorMode" value="copilot"><b>Copilot</b><span>Cycles run only when you press Run. Nova suggests; you do.</span></label>
+          <label><input type="radio" name="operatorMode" value="supervised"><b>Supervised</b><span>Daily cycle: syncs revenue, reviews real metrics, recommends actions. Everything waits for you.</span></label>
+          <label><input type="radio" name="operatorMode" value="autopilot"><b>Autopilot</b><span>Supervised, plus drafts internal work for up to 2 low-risk actions. Publishing, messages and spending still wait for you.</span></label>
+        </div>
+        <div class="operator-controls"><label>Daily AI token cap<input id="operatorTokenCap" type="number" min="5000" max="200000" step="5000" value="30000"></label><button id="operatorSave" class="secondary" type="button">Save settings</button><button id="operatorPause" class="secondary" type="button">Pause operator</button><button id="operatorRunNow" class="primary" type="button">Run cycle now →</button></div>
+        <div id="operatorLatest" class="operator-empty"><b>No operating cycles yet</b><span>Run a cycle to get a CEO brief based on this company’s real numbers.</span></div>
+        <details class="operator-history"><summary>Cycle history and audit log</summary><div id="operatorHistory"></div></details>
+      </section>
       <section class="durable-command panel"><div class="durable-command-copy"><small>DURABLE AGENT MISSIONS</small><h3>Assign work that survives reloads and failures.</h3><p>Strategy, Research, and Builder complete retryable preparation steps. The mission then pauses until you approve or reject its external execution boundary.</p><div class="durable-trust"><span>↻ Automatic retries</span><span>Ⅱ Approval pause</span><span>✓ Persistent run history</span></div></div><form id="durableMissionForm"><label>MISSION OUTCOME<textarea id="durableMissionObjective" required maxlength="1200" placeholder="Example: Prepare and validate the launch required to recruit our first five paying design partners."></textarea></label><button class="primary" type="submit">Start durable mission →</button></form></section>
       <section class="durable-runs panel"><div class="panel-head"><div><small>WORKFLOW RUNTIME</small><h3>Durable mission runs</h3></div><span id="durableRuntimeStatus">Checking runtime…</span></div><div id="durableMissionList" class="engine-empty"><b>No durable missions yet</b><span>Start a mission to create a crash-safe, retryable run with a founder approval checkpoint.</span></div></section>
       <section class="autopilot-scoreboard">
@@ -374,5 +386,6 @@
   <script src="minimal-ui.js"></script>
   <script src="durable-missions.js"></script>
   <script src="connections.js"></script>
+  <script src="operator-panel.js"></script>
 </body>
 </html>

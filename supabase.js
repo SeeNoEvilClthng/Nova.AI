@@ -257,6 +257,72 @@ async function updateLead(req, id, status) {
 
 const hasSecret = () => Boolean(secretKey());
 
+// Autonomous operator storage and server-side reads used by scheduled cycles,
+// which run without a signed-in user.
+async function adminCount(path) {
+  if (!secretKey()) throw Object.assign(new Error("Supabase server secret is not configured"), { status: 503 });
+  const response = await fetch(`${baseUrl()}${path}`, { method: "HEAD", headers: { apikey: secretKey(), Authorization: `Bearer ${secretKey()}`, Prefer: "count=exact" } });
+  if (!response.ok) throw Object.assign(new Error(`Supabase count failed (${response.status})`), { status: response.status });
+  const total = Number(String(response.headers.get("content-range") || "").split("/")[1]);
+  return Number.isFinite(total) ? total : 0;
+}
+
+async function adminPageMetrics(workspaceId) {
+  const pages = await adminRequest(`/rest/v1/nova_published_pages?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,published&limit=1`), page = pages[0];
+  if (!page) return { published: false, views: 0, signups: 0, newLeads: 0 };
+  const id = encodeURIComponent(page.id);
+  const [views, signups, newLeads] = await Promise.all([
+    adminCount(`/rest/v1/nova_page_events?page_id=eq.${id}&event_type=eq.view&select=id`),
+    adminCount(`/rest/v1/nova_page_leads?page_id=eq.${id}&select=id`),
+    adminCount(`/rest/v1/nova_page_leads?page_id=eq.${id}&status=eq.new&select=id`)
+  ]);
+  return { published: Boolean(page.published), views, signups, newLeads };
+}
+
+async function adminValidationCount(workspaceId) {
+  return adminCount(`/rest/v1/nova_validation_entries?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id`);
+}
+
+async function adminListOrders(workspaceId) {
+  return adminRequest(`/rest/v1/nova_orders?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=amount_minor,refunded_minor,currency,mode,paid_at&order=paid_at.desc&limit=500`);
+}
+
+async function adminWorkspaceTokens(workspaceId) {
+  return Number(await adminRequest("/rest/v1/rpc/nova_workspace_ai_tokens", { method: "POST", body: JSON.stringify({ target: workspaceId }) })) || 0;
+}
+
+async function adminTokensSince(workspaceId, since, operationPrefix) {
+  const rows = await adminRequest(`/rest/v1/nova_ai_usage_events?workspace_id=eq.${encodeURIComponent(workspaceId)}&created_at=gte.${encodeURIComponent(since)}&operation=like.${encodeURIComponent(operationPrefix)}*&select=total_tokens&limit=1000`);
+  return rows.reduce((sum, row) => sum + Number(row.total_tokens || 0), 0);
+}
+
+async function adminGetSubscription(userId) {
+  const rows = await adminRequest(`/rest/v1/nova_subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=tier,status&limit=1`);
+  return rows[0] || null;
+}
+
+async function adminListOperatorWorkspaces() {
+  return adminRequest("/rest/v1/nova_workspaces?select=id,user_id,name,state&state->operatingMode->>mode=in.(supervised,autopilot)&state->operatingMode->>paused=eq.false&limit=200");
+}
+
+async function insertOperatorRun(row) {
+  const rows = await adminRequest("/rest/v1/nova_operator_runs", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
+  return rows[0];
+}
+
+async function updateOperatorRun(id, values) {
+  return adminRequest(`/rest/v1/nova_operator_runs?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(values) });
+}
+
+async function adminLatestOperatorRun(workspaceId) {
+  const rows = await adminRequest(`/rest/v1/nova_operator_runs?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,status,started_at&order=started_at.desc&limit=1`);
+  return rows[0] || null;
+}
+
+async function listOperatorRuns(req, workspaceId) {
+  return request(`/rest/v1/nova_operator_runs?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,trigger,mode,status,metrics,brief,drafts,model,tokens,error,started_at,finished_at&order=started_at.desc&limit=10`, req);
+}
+
 // Revenue Engine storage. Payment credentials and orders are written only with
 // the server secret; owners can read their own orders through RLS.
 async function getPaymentConnection(workspaceId) {
@@ -293,4 +359,4 @@ async function countPageViews(req, workspaceId) {
   return page ? countRows(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(page.id)}&event_type=eq.view&select=id`, req) : 0;
 }
 
-module.exports = { getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
+module.exports = { adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };

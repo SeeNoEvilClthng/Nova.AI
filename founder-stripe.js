@@ -7,7 +7,7 @@ const STRIPE_API = "https://api.stripe.com/v1";
 // Restricted-key permissions the founder must grant.
 const REQUIRED_PERMISSIONS = [
   ["Products", "Write"], ["Prices", "Write"], ["Payment Links", "Write"],
-  ["Checkout Sessions", "Read"], ["PaymentIntents", "Read"], ["Charges", "Read"]
+  ["Checkout Sessions", "Read"], ["PaymentIntents", "Read"], ["Charges", "Read"], ["Invoices", "Read"]
 ];
 
 function keyMode(apiKey) {
@@ -92,7 +92,25 @@ function createFounderStripe({ fetchImpl = fetch } = {}) {
         startingAfter = result.data[result.data.length - 1].id;
       }
       return sessions;
+    },
+
+    // Paid renewal invoices for a subscription started through a payment
+    // link. The first invoice is the checkout payment itself, already counted
+    // from the session, so it is excluded.
+    async renewalInvoices(apiKey, subscriptionId) {
+      const result = await call(apiKey, "GET", "/invoices", { subscription: subscriptionId, status: "paid", limit: 100 });
+      return (result.data || []).filter(invoice => invoice.billing_reason !== "subscription_create" && Number(invoice.amount_paid) > 0);
     }
+  };
+}
+
+function orderFromInvoice(invoice, { workspaceId, offerId, mode }) {
+  return {
+    workspace_id: workspaceId, provider: "stripe", external_id: invoice.id, offer_id: offerId, mode, status: "paid",
+    amount_minor: Number(invoice.amount_paid || 0), refunded_minor: 0,
+    currency: String(invoice.currency || "usd").toUpperCase(),
+    customer_email: String(invoice.customer_email || "").slice(0, 254) || null,
+    paid_at: new Date(Number(invoice.status_transitions?.paid_at || invoice.created || 0) * 1000).toISOString()
   };
 }
 
@@ -114,4 +132,4 @@ function orderFromSession(session, { workspaceId, offerId, mode }) {
   };
 }
 
-module.exports = { createFounderStripe, orderFromSession, keyMode, encodeForm, safeCheckoutUrl, REQUIRED_PERMISSIONS };
+module.exports = { createFounderStripe, orderFromSession, orderFromInvoice, keyMode, encodeForm, safeCheckoutUrl, REQUIRED_PERMISSIONS };

@@ -110,6 +110,11 @@ async function handleRevenue({ req, res, pathname, requestUrl, sendJson, readBod
   }
 }
 
+async function syncWorkspaceRevenue(workspaceId) {
+  const workspace = await supabase.adminGetWorkspace(workspaceId, "id,state");
+  return engine.sync({ workspaceId, offers: workspace?.state?.offers });
+}
+
 // Daily cron: sync every connected company's Stripe payments.
 async function syncAllRevenue() {
   if (!supabase.configured() || !supabase.hasSecret()) return [];
@@ -123,4 +128,4 @@ async function syncAllRevenue() {
   return results;
 }
 
-module.exports = { handleRevenue, syncAllRevenue, cleanOffer, templateOffer, offerSchema };
+module.exports = { handleRevenue, syncAllRevenue, syncWorkspaceRevenue, cleanOffer, templateOffer, offerSchema };

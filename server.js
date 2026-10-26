@@ -83,6 +83,7 @@ const staticFiles = new Map([
   ["/minimal-ui.css", ["minimal-ui.css", fs.readFileSync(path.join(__dirname, "minimal-ui.css"))]],
   ["/durable-missions.css", ["durable-missions.css", fs.readFileSync(path.join(__dirname, "durable-missions.css"))]],
   ["/connections.css", ["connections.css", fs.readFileSync(path.join(__dirname, "connections.css"))]],
+  ["/operator.css", ["operator.css", fs.readFileSync(path.join(__dirname, "operator.css"))]],
   ["/public-site.css", ["public-site.css", fs.readFileSync(path.join(__dirname, "public-site.css"))]],
   ["/world-gateway.css", ["world-gateway.css", fs.readFileSync(path.join(__dirname, "world-gateway.css"))]],
   ["/world-gateway.js", ["world-gateway.js", fs.readFileSync(path.join(__dirname, "world-gateway.js"))]],
@@ -104,7 +105,8 @@ const staticFiles = new Map([
   ["/execution-engine.js", ["execution-engine.js", fs.readFileSync(path.join(__dirname, "execution-engine.js"))]],
   ["/minimal-ui.js", ["minimal-ui.js", fs.readFileSync(path.join(__dirname, "minimal-ui.js"))]],
   ["/durable-missions.js", ["durable-missions.js", fs.readFileSync(path.join(__dirname, "durable-missions.js"))]],
-  ["/connections.js", ["connections.js", fs.readFileSync(path.join(__dirname, "connections.js"))]]
+  ["/connections.js", ["connections.js", fs.readFileSync(path.join(__dirname, "connections.js"))]],
+  ["/operator-panel.js", ["operator-panel.js", fs.readFileSync(path.join(__dirname, "operator-panel.js"))]]
 ]);
 const auraProductImageDirectory = path.join(__dirname, "public/product-images/aura");
 if (fs.existsSync(auraProductImageDirectory)) {
@@ -713,6 +715,7 @@ app.use(async (req, res) => {
       value.toolPermissions=toolPermissions.normalizePermissions(existing.state?.toolPermissions);
       value.aiUsage=preserveUsage(existing.state?.aiUsage,value.aiUsage);
       value.offers=mergeOfferCheckouts(existing.state?.offers,value.offers);
+      value.operatingMode=existing.state?.operatingMode;
       const raw = supabase.configured() ? await supabase.saveWorkspace(req, workspaceId, value) : database.saveWorkspace(workspaceId, value);
       const workspace = raw && supabase.configured() ? { id: raw.id, name: raw.name, state: raw.state, createdAt: raw.created_at, updatedAt: raw.updated_at } : raw;
       return workspace ? sendJson(res, 200, workspace) : sendJson(res, 404, { error: "Workspace not found" });

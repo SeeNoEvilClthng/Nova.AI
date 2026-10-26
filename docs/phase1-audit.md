@@ -125,9 +125,37 @@ The first complete idea-to-revenue path. A founder drafts an offer (optionally w
 3. Optionally set `AI_GATEWAY_FAST_MODEL` and `AI_GATEWAY_REASONING_MODEL`.
 
 **Not yet covered:**
-- Subscription renewals: only the first payment is synced. Next step: sync paid invoices.
+- ~~Subscription renewals~~: done in Phase 3. This needs `Invoices: Read` on the key; older keys still sync first payments and show a warning.
 - Sync is pull-based (daily, plus the Sync button), not webhook-driven.
 - Nothing has been tested against a real Stripe account.
+
+## Phase 3 (2026-10-29): Autonomous Operator
+
+A daily operating cycle per company, run as a durable workflow outside the request path:
+1. Sync verified revenue.
+2. Collect real metrics (revenue, traffic, signups, new leads, interviews, live offers, open/blocked tasks).
+3. A CEO agent writes a brief with 3–5 recommended actions.
+4. In Autopilot mode, it also drafts internal work for up to two low-risk actions.
+
+The cycle never publishes, messages anyone, spends money or changes prices. External actions are always proposals, and the server forces `requiresApproval` on them whatever the model returns.
+
+| File | Change |
+|---|---|
+| `operator.js` (new) | Mode settings (Copilot / Supervised / Autopilot, pause, daily token cap of 5k–200k), metric builder, a rule-based brief when no model is configured, action-safety enforcement, Autopilot drafting, and checks before a scheduled run (pause, active plan, AI budget). |
+| `operator-runtime.js` (new) | Wires the operator to Supabase, the router, the usage ledger and revenue sync. |
+| `workflows/nova-operator.ts` (new) | Durable steps: start → collect → brief → draft → finish. A run that fails is recorded as failed. |
+| `src/index.ts` | `POST /api/operator/settings`, `GET /api/operator/runs`, `POST /api/operator/run` (manual; same entitlement and budget checks as other AI routes). The existing daily cron also starts one cycle per eligible company (Supervised or Autopilot, not paused, no run in the last 20 h). |
+| `server.js` | `operatingMode` is server-owned: browser saves can't change the mode, pause or cap. Serves the new panel files. |
+| `supabase.js` | Server-side metric reads, token-use queries and the operator run log. |
+| `founder-stripe.js`, `revenue-engine.js` | Subscription renewal invoices sync as orders (the first invoice is excluded so it isn't double counted). |
+| `operator-panel.js`, `operator.css`, `index.html` | Autopilot screen: mode picker, token cap, Pause/Resume, Run cycle now, latest brief with a real-metrics strip, risks, actions tagged Internal or Needs your approval (each can be handed to the AI team), Autopilot drafts, and a history/audit table. |
+| `supabase/migrations/20261029_operator_runs.sql` | `nova_operator_runs`: owners can read; only the server can write. |
+| `phase4.test.js` | 9 new tests (62 total). |
+
+**Needs configuration:** run `20261029_operator_runs.sql`. Scheduled cycles use the existing daily cron and `CRON_SECRET`.
+
+## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
+0. ~~(E) Operating modes with audit log, caps and emergency pause~~: done in Phase 3.
 
 ## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
 1. ~~(A) Shared rate limiting and anonymous-write lockdown~~ and ~~(A) Bundle the front-end~~: done in 1b. ~~(B) Model routing~~ and ~~(C) Business-to-revenue path~~: done in Phase 2 (see above for gaps).

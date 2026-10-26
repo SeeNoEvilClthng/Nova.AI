@@ -2,7 +2,7 @@
 // offers into live checkout links, and syncs paid orders into a verified
 // revenue ledger. Revenue figures come only from payments Stripe reports;
 // nothing the browser saves can create or change an order.
-const { orderFromSession, safeCheckoutUrl } = require("./founder-stripe");
+const { orderFromSession, orderFromInvoice, safeCheckoutUrl } = require("./founder-stripe");
 
 function httpError(message, status) { return Object.assign(new Error(message), { status }); }
 
@@ -93,15 +93,22 @@ function createRevenueEngine({ store, stripe, secretBox }) {
     async sync({ workspaceId, offers }) {
       const { apiKey, connection } = await apiKeyFor(workspaceId);
       const linked = (Array.isArray(offers) ? offers : []).filter(offer => offer?.checkout?.paymentLinkId);
-      const rows = [];
+      const rows = [], warnings = [];
+      let renewalsBlocked = false;
       for (const offer of linked) {
-        const sessions = await stripe.paidSessions(apiKey, offer.checkout.paymentLinkId);
-        rows.push(...sessions.map(session => orderFromSession(session, { workspaceId, offerId: offer.id, mode: connection.mode })));
+        const sessions = await stripe.paidSessions(apiKey, offer.checkout.paymentLinkId), context = { workspaceId, offerId: offer.id, mode: connection.mode };
+        rows.push(...sessions.map(session => orderFromSession(session, context)));
+        // Keys created before Invoices: Read was required can still sync
+        // first payments; renewals are skipped with a warning.
+        for (const subscriptionId of renewalsBlocked ? [] : sessions.map(session => session.subscription).filter(id => typeof id === "string")) {
+          try { rows.push(...(await stripe.renewalInvoices(apiKey, subscriptionId)).map(invoice => orderFromInvoice(invoice, context))); }
+          catch (error) { if (error.status !== 403) throw error; renewalsBlocked = true; warnings.push("Subscription renewals were skipped: add Invoices: Read to the Stripe restricted key."); }
+        }
       }
       if (rows.length) await store.upsertOrders(rows);
       const syncedAt = new Date().toISOString();
       await store.markSynced(workspaceId, syncedAt);
-      return { syncedAt, offersChecked: linked.length, ordersSeen: rows.length };
+      return { syncedAt, offersChecked: linked.length, ordersSeen: rows.length, warnings };
     }
   };
 }

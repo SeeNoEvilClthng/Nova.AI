@@ -7,6 +7,9 @@ import supabase from "../supabase.js";
 import database from "../database.js";
 import toolPermissions from "../tool-permissions.js";
 import aiAccess from "../ai-access.js";
+import operatorLib from "../operator.js";
+import operator from "../operator-runtime.js";
+import {novaOperatorWorkflow} from "../workflows/nova-operator.js";
 import {getToken} from "@vercel/connect";
 
 type MissionRecord={id:string;runId:string;workspaceId:string;objective:string;approvalToken:string;status:string;createdAt:string;updatedAt:string};
@@ -27,6 +30,58 @@ const connectionCatalog=[
   {id:"payments",name:"Stripe",purpose:"Revenue visibility, refunds, and spending",connectorEnv:"STRIPE_SECRET_KEY",capabilities:["read","refund","spend"]},
   {id:"marketing",name:"Marketing",purpose:"Draft and publish campaigns",connectorEnv:"VERCEL_CONNECT_MARKETING_CONNECTOR",capabilities:["draft","publish"]}
 ];
+
+// Autonomous Operator. Settings are server-owned (PUT /api/state cannot change
+// them) so the mode, pause switch and daily cap only change through here.
+app.post("/api/operator/settings",json,async(req,res)=>{
+  try{
+    if(!supabase.configured())return res.status(503).json({error:"The operator requires Supabase"});
+    await supabase.verifyUser(req);const workspaceId=String(req.body.workspaceId||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return res.status(404).json({error:"Workspace not found"});
+    const settings=operatorLib.normalizeSettings(req.body.settings||{},workspace.state?.operatingMode||{});
+    await supabase.saveWorkspace(req,workspaceId,{...(workspace.state||{}),operatingMode:settings});
+    return res.json({settings});
+  }catch(error:any){return res.status(error.status||500).json({error:error.message||"Settings could not be saved"})}
+});
+
+app.get("/api/operator/runs",async(req,res)=>{
+  try{
+    if(!supabase.configured())return res.status(503).json({error:"The operator requires Supabase"});
+    const workspaceId=String(req.query.workspace||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return res.status(404).json({error:"Workspace not found"});
+    // A run still "running" after an hour has died; show it as failed.
+    const runs=(await supabase.listOperatorRuns(req,workspaceId)).map((run:any)=>run.status==="running"&&Date.now()-Date.parse(run.started_at)>3_600_000?{...run,status:"failed",error:run.error||"The cycle stopped before finishing"}:run);
+    return res.json({settings:operatorLib.normalizeSettings(workspace.state?.operatingMode||{}),runs});
+  }catch(error:any){return res.status(error.status||500).json({error:error.message||"Operator runs could not load"})}
+});
+
+app.post("/api/operator/run",json,async(req,res)=>{
+  try{
+    if(!supabase.configured())return res.status(503).json({error:"The operator requires Supabase"});
+    const user=await supabase.verifyUser(req),workspaceId=String(req.body.workspaceId||""),workspace=await supabase.getWorkspace(req,workspaceId);if(!workspace)return res.status(404).json({error:"Workspace not found"});
+    if(operatorLib.normalizeSettings(workspace.state?.operatingMode||{}).paused)return res.status(409).json({error:"The operator is paused. Resume it first."});
+    await aiAccess.assertCanGenerate(req,user,workspaceId);
+    const run=await start(novaOperatorWorkflow,[{workspaceId,trigger:"manual"}]);
+    return res.status(202).json({started:true,workflowRunId:run.runId});
+  }catch(error:any){return res.status(error.status||500).json({error:error.message||"The operating cycle could not start"})}
+});
+
+// Piggybacks on the existing daily cron (vercel.json) so no new cron job is
+// needed: starts one durable cycle per eligible company, then lets the legacy
+// handler run the reseller campaigns and revenue sync.
+app.get("/api/cron/reseller-campaigns",async(req,res,next)=>{
+  try{
+    if(!process.env.CRON_SECRET||String(req.headers.authorization||"")!==`Bearer ${process.env.CRON_SECRET}`||!supabase.configured()||!supabase.hasSecret())return next();
+    let started=0;
+    for(const workspace of await supabase.adminListOperatorWorkspaces()){
+      const latest=await supabase.adminLatestOperatorRun(workspace.id);
+      if(latest&&Date.now()-Date.parse(latest.started_at)<20*3_600_000)continue;
+      const access=await operator.scheduledAccess(workspace);
+      if(!access.allowed){await supabase.insertOperatorRun({workspace_id:workspace.id,trigger:"scheduled",mode:operatorLib.normalizeSettings(workspace.state?.operatingMode).mode,status:"skipped",error:access.reason,started_at:new Date().toISOString(),finished_at:new Date().toISOString()});continue}
+      await start(novaOperatorWorkflow,[{workspaceId:workspace.id,trigger:"scheduled"}]);started++;
+    }
+    console.log(`Operator: started ${started} scheduled cycle(s)`);
+  }catch(error:any){console.error("Operator scheduling failed:",error.message)}
+  return next();
+});
 
 app.post("/api/durable-missions",json,async(req,res)=>{
   try{
