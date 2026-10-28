@@ -20,6 +20,14 @@ const KINDS = {
       return { subject, body, leadCount: Math.max(0, Math.floor(Number(payload.leadCount) || 0)) };
     }
   },
+  page_headline_update: {
+    label: "Apply A/B test result",
+    clean: payload => {
+      const experimentId = String(payload.experimentId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(experimentId) || !["a", "b"].includes(payload.variant)) throw Object.assign(new Error("The action needs a test and a version"), { status: 400 });
+      return { experimentId, variant: payload.variant, headline: String(payload.headline || "").slice(0, 130), subhead: String(payload.subhead || "").slice(0, 240), verdict: String(payload.verdict || "").slice(0, 300) };
+    }
+  },
   offer_go_live: {
     label: "Take an offer live",
     clean: payload => {

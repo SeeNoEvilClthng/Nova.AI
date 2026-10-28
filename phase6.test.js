@@ -14,7 +14,7 @@ const outreach = require("./email-outreach");
 const { orderFromSession } = require("./founder-stripe");
 
 test("attribution keeps clean UTM tags and external referrers only", () => {
-  assert.deepEqual(cleanAttribution({ visitorId: "abc12345-xyz", utmSource: " Instagram ", utmMedium: "social", utmCampaign: "<script>", referrer: "https://www.reddit.com/r/x" }, "nova.example"), { visitor_id: "abc12345-xyz", utm_source: "instagram", utm_medium: "social", utm_campaign: null, referrer_host: "reddit.com" });
+  assert.deepEqual(cleanAttribution({ visitorId: "abc12345-xyz", utmSource: " Instagram ", utmMedium: "social", utmCampaign: "<script>", referrer: "https://www.reddit.com/r/x" }, "nova.example"), { visitor_id: "abc12345-xyz", utm_source: "instagram", utm_medium: "social", utm_campaign: null, referrer_host: "reddit.com", experiment_id: null, variant: null });
   assert.equal(cleanAttribution({ referrer: "https://nova.example/p/acme" }, "nova.example").referrer_host, null);
   assert.equal(cleanAttribution({ visitorId: "short" }).visitor_id, null);
 });

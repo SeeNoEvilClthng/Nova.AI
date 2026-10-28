@@ -14,6 +14,10 @@ const executors = {
     if (!result.sent && result.failed) throw new Error(`All ${result.failed} emails were rejected by the email provider`);
     return { provider: "resend", sent: result.sent, failed: result.failed, heldForDailyLimit: result.skippedForLimits, batchId: result.batchId, messageIds: result.providerIds };
   },
+  async page_headline_update(action) {
+    const { experiment, results } = await require("./experiment-routes").applyWinner({ experimentId: action.payload.experimentId, variant: action.payload.variant });
+    return { provider: "nova", experimentId: experiment.id, appliedVariant: experiment.applied_variant, pValue: Number(results.pValue.toFixed(4)), variants: results.variants.map(item => ({ variant: item.variant, visitors: item.visitors, signups: item.signups })) };
+  },
   async offer_go_live(action) {
     const offer = await require("./revenue-routes").goLiveOffer({ workspaceId: action.workspace_id, offerId: action.payload.offerId });
     return { provider: "stripe", mode: offer.checkout.mode, paymentLinkId: offer.checkout.paymentLinkId, productId: offer.checkout.productId, priceId: offer.checkout.priceId, url: offer.checkout.url };
@@ -45,6 +49,13 @@ async function proposeOperatorActions({ workspaceId, userId, metrics }) {
       const result = await engine.propose({ workspaceId, kind: "offer_go_live", title: `Take “${String(offer.name).slice(0, 80)}” live`, summary: "Creates the product, price and a public checkout link in this company's Stripe account so customers can pay.", payload: { offerId: offer.id, name: offer.name, price: offer.price, currency: offer.currency, billing: offer.billing }, dedupeKey: `offer_go_live:${offer.id}` });
       if (result.created) created++;
     }
+  }
+  // A running A/B test with a statistically significant result.
+  const test = await require("./experiment-routes").runningExperimentResults(workspaceId).catch(() => null);
+  if (test?.results?.status === "winner") {
+    const winner = test.results.winner, copy = test.experiment.variants[winner];
+    const result = await engine.propose({ workspaceId, kind: "page_headline_update", title: winner === "b" ? "Make version B your launch-page headline" : "End the A/B test and keep your current headline", summary: test.results.message, payload: { experimentId: test.experiment.id, variant: winner, headline: copy.headline, subhead: copy.subhead, verdict: test.results.message }, dedupeKey: `experiment:${test.experiment.id}` });
+    if (result.created) created++;
   }
   return { created };
 }

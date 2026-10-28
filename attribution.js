@@ -28,7 +28,10 @@ function cleanAttribution(input = {}, ownHost = "") {
     utm_source: cleanTag(input.utmSource),
     utm_medium: cleanTag(input.utmMedium),
     utm_campaign: cleanTag(input.utmCampaign),
-    referrer_host: cleanReferrerHost(input.referrer, ownHost)
+    referrer_host: cleanReferrerHost(input.referrer, ownHost),
+    // A/B test tagging: only well-formed IDs and the two version labels.
+    experiment_id: /^[0-9a-f-]{36}$/i.test(String(input.experimentId || "")) ? String(input.experimentId) : null,
+    variant: ["a", "b"].includes(input.variant) && /^[0-9a-f-]{36}$/i.test(String(input.experimentId || "")) ? input.variant : null
   };
 }
 

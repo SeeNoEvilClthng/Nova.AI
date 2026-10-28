@@ -42,6 +42,7 @@
   <link rel="stylesheet" href="operator.css">
   <link rel="stylesheet" href="growth.css">
   <link rel="stylesheet" href="action-center.css">
+  <link rel="stylesheet" href="experiment.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -198,6 +199,17 @@
             <p class="growth-footer-note">Every email adds why the person is receiving it, a one-click unsubscribe link, and sets replies to go to you. Unsubscribed and already-contacted leads are skipped.</p>
             <div class="growth-actions"><button id="copyFollowup" class="secondary" type="button">Copy</button><button id="sendFollowup" class="primary" type="button">Review and send →</button></div>
           </div>
+        </article>
+        <article class="panel experiment-panel"><div class="panel-head"><div><small>A/B TEST</small><h3>Test a new headline against your current one</h3></div><span id="experimentState">—</span></div>
+          <div id="experimentBody" class="growth-empty">Publish your launch page to run a test.</div>
+          <form id="experimentForm" class="experiment-form" hidden>
+            <label>Version B headline<input id="experimentHeadline" maxlength="130" required></label>
+            <label>Version B subheading<textarea id="experimentSubhead" maxlength="240" rows="2"></textarea></label>
+            <input id="experimentHypothesis" type="hidden">
+            <p id="experimentHypothesisText" class="growth-footer-note"></p>
+            <div class="growth-actions"><button id="draftExperiment" class="secondary" type="button">✦ Draft version B</button><button class="primary" type="submit">Start test →</button></div>
+          </form>
+          <p class="growth-footer-note">Visitors are split 50/50 and always see the same version. Nova calls a winner only after each version has at least 100 visitors, the test has 10 signups, and the difference is significant at 95% confidence.</p>
         </article>
       </div>
     </section>
@@ -408,5 +420,6 @@
   <script src="operator-panel.js"></script>
   <script src="growth-panel.js"></script>
   <script src="action-center.js"></script>
+  <script src="experiment-panel.js"></script>
 </body>
 </html>

@@ -199,10 +199,11 @@ async function writeWithOptionalFields(path, options, rows, optionalKeys) {
     return adminRequest(path, { ...options, body: JSON.stringify(Array.isArray(rows) ? rows.map(strip) : strip(rows)) });
   }
 }
-const ATTRIBUTION_KEYS = ["visitor_id", "utm_source", "utm_medium", "utm_campaign", "referrer_host"];
+const ATTRIBUTION_KEYS = ["visitor_id", "utm_source", "utm_medium", "utm_campaign", "referrer_host", "experiment_id", "variant"];
 
 async function captureLead(pageId, email, attribution = {}) {
-  return writeWithOptionalFields("/rest/v1/nova_page_leads", { method:"POST", headers:{ Prefer:"return=minimal" } }, { page_id:pageId, email, ...attribution }, ATTRIBUTION_KEYS);
+  const { experiment_id: _experiment, variant: _variant, ...leadAttribution } = attribution;
+  return writeWithOptionalFields("/rest/v1/nova_page_leads", { method:"POST", headers:{ Prefer:"return=minimal" } }, { page_id:pageId, email, ...leadAttribution }, ATTRIBUTION_KEYS);
 }
 
 async function recordPageEvent(pageId, eventType, attribution = {}) {
@@ -299,6 +300,42 @@ async function updateLead(req, id, status) {
 }
 
 const hasSecret = () => Boolean(secretKey());
+
+// Launch-page A/B tests. Founders read their own; the server writes.
+const EXPERIMENT_FIELDS = "id,workspace_id,page_id,status,variants,winner,applied_variant,created_at,ended_at";
+async function adminRunningExperiment(pageId) {
+  const rows = await adminRequest(`/rest/v1/nova_experiments?page_id=eq.${encodeURIComponent(pageId)}&status=eq.running&select=${EXPERIMENT_FIELDS}&limit=1`);
+  return rows[0] || null;
+}
+async function insertExperiment(row) {
+  const rows = await adminRequest("/rest/v1/nova_experiments", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
+  return rows[0];
+}
+async function listExperiments(req, workspaceId) {
+  return request(`/rest/v1/nova_experiments?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=${EXPERIMENT_FIELDS}&order=created_at.desc&limit=10`, req);
+}
+async function adminGetExperiment(id) {
+  const rows = await adminRequest(`/rest/v1/nova_experiments?id=eq.${encodeURIComponent(id)}&select=${EXPERIMENT_FIELDS}&limit=1`);
+  return rows[0] || null;
+}
+// Ends a running test only once, even if two requests race.
+async function endExperiment(id, values) {
+  const rows = await adminRequest(`/rest/v1/nova_experiments?id=eq.${encodeURIComponent(id)}&status=eq.running&select=${EXPERIMENT_FIELDS}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ ...values, ended_at: new Date().toISOString() }) });
+  return rows[0] || null;
+}
+async function adminExperimentEvents(pageId, experimentId) {
+  return adminRequest(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(pageId)}&experiment_id=eq.${encodeURIComponent(experimentId)}&select=event_type,visitor_id,variant&limit=20000`);
+}
+async function adminOrdersForAttribution(workspaceId) {
+  return adminRequest(`/rest/v1/nova_orders?workspace_id=eq.${encodeURIComponent(workspaceId)}&client_reference_id=not.is.null&select=client_reference_id,amount_minor,refunded_minor&limit=2000`);
+}
+async function adminUpdatePageSnapshot(pageId, snapshot) {
+  return adminRequest(`/rest/v1/nova_published_pages?id=eq.${encodeURIComponent(pageId)}`, { method: "PATCH", body: JSON.stringify({ snapshot, updated_at: new Date().toISOString() }) });
+}
+async function adminGetPageById(pageId) {
+  const rows = await adminRequest(`/rest/v1/nova_published_pages?id=eq.${encodeURIComponent(pageId)}&select=id,workspace_id,slug,snapshot,published&limit=1`);
+  return rows[0] || null;
+}
 
 // Action Center: concrete actions proposed by agents, approved by the
 // founder, executed by the server. Founders read their own; the server writes.
@@ -461,4 +498,4 @@ async function countPageViews(req, workspaceId) {
   return page ? countRows(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(page.id)}&event_type=eq.view&select=id`, req) : 0;
 }
 
-module.exports = { insertAction, findOpenAction, listActions, getAction, transitionAction, adminGetOwnerPage, savePaymentWebhook, listPageEventsForGrowth, listLeadsForGrowth, listOrdersForGrowth, adminOutreachLeads, adminCountEmailSendsSince, insertEmailSends, markLeadsContacted, unsubscribeLead, insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
+module.exports = { adminRunningExperiment, insertExperiment, listExperiments, adminGetExperiment, endExperiment, adminExperimentEvents, adminOrdersForAttribution, adminUpdatePageSnapshot, adminGetPageById, insertAction, findOpenAction, listActions, getAction, transitionAction, adminGetOwnerPage, savePaymentWebhook, listPageEventsForGrowth, listLeadsForGrowth, listOrdersForGrowth, adminOutreachLeads, adminCountEmailSendsSince, insertEmailSends, markLeadsContacted, unsubscribeLead, insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };

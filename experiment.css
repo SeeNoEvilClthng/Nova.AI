@@ -1,0 +1,7 @@
+.experiment-panel{display:grid;gap:12px}.experiment-panel .panel-head>span{color:#858e9d;font-size:9px}.experiment-running{display:grid;gap:10px}
+.experiment-table{width:100%;border-collapse:collapse;font-size:11px}.experiment-table th,.experiment-table td{padding:8px;border-bottom:1px solid var(--line,#ffffff10);text-align:right;vertical-align:top}.experiment-table th:nth-child(-n+2),.experiment-table td:nth-child(-n+2){text-align:left}.experiment-table th{color:#6e7685;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.experiment-table td{color:#c9cfd9}.experiment-table tr.winner td{color:#65dbac}
+.experiment-verdict{margin:0;padding:10px 12px;border-radius:10px;background:#ffffff06;color:#9ea6b4;font-size:10px;line-height:1.6}.experiment-verdict.winner{background:#55d6a214;color:#65dbac}.experiment-verdict.no_difference{background:#f0b45412;color:#f0c071}
+.experiment-current{display:grid;gap:4px;margin:0;padding:10px 12px;border:1px solid var(--line,#ffffff10);border-radius:10px}.experiment-current b{color:#eeeaf6;font-size:12px}.experiment-current span{color:#8d8697;font-size:10px}
+.experiment-form{display:grid;gap:10px}.experiment-form label{display:grid;gap:5px;color:#9ea6b4;font-size:10px}.experiment-form textarea{resize:vertical;font:inherit}
+@media(max-width:620px){.experiment-table{display:block;overflow-x:auto}}
+

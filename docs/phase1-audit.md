@@ -272,9 +272,42 @@ On approval, the server runs it with the **same code as the manual buttons** (`s
 
 **Needs configuration:** run `20261102_actions.sql`. Email actions need Resend to be configured (Phase 5).
 
+## Phase 8 (2026-11-03): launch-page A/B tests with honest statistics
+
+Founders test an alternative headline and subheading (version B, written by them or drafted by the Growth agent) against the live one (version A).
+
+**How the test runs:**
+- An early inline script splits visitors 50/50 using a stable FNV-1a hash of their random visitor ID. Each visitor always sees the same version, and the copy is swapped before it paints.
+- Page views and signups are tagged with the experiment and version.
+- Results are counted per version: unique visitors, unique signups, signup rate, and verified paid orders (via `client_reference_id`).
+
+**How a winner is called:**
+- Nova uses a two-sided two-proportion z-test.
+- A winner is only called once each version has ≥ 100 visitors, the test has ≥ 10 signups, and p < 0.05. Before that it says "collecting"; after that, without significance, it says "no clear difference". This avoids false winners from peeking early.
+- Events that try to switch a visitor's version are ignored.
+- When the server finds a significant winner, the operator proposes **"Make version B your launch-page headline"** (or "keep A") in the Action Center.
+- Approving it, or the founder's own "End test" button, updates the live page snapshot and the Launch Studio draft, ends the test, and records the p-value and counts as signed evidence.
+
+**Fixes found while building this:**
+- **Script injection guard.** Version-B copy embedded in the page script escapes `<`, so text such as `</script>` can't break out. This is covered by a test that runs the real page script.
+- **Live bug.** `[hidden]` was being overridden by component `display` rules. On the live Revenue screen, the Stripe connect form was always visible and Cancel appeared to do nothing. A base `[hidden]{display:none!important}` rule in `styles.css` fixes this app-wide.
+
+| File | Change |
+|---|---|
+| `experiments.js` (new) | Variant assignment, normal CDF, two-proportion test, results and verdicts, copy validation. |
+| `experiment-routes.js` (new) | `GET/POST /api/experiments`, `POST /api/experiments/draft`, `POST /api/experiments/<id>/end`; `applyWinner`; `runningExperimentResults`. Loaded behind the startup guard. |
+| `server.js` | Early variant script on public pages; loads the running test for each page view; mounts the routes. |
+| `attribution.js`, `supabase.js` | Experiment/version tags on page events (dropped automatically until the migration runs); experiment storage; page snapshot update. |
+| `actions.js`, `action-routes.js`, `action-center.js` | New `page_headline_update` action kind, its executor, the operator proposal, and its preview and evidence display. |
+| `experiment-panel.js`, `experiment.css`, `index.html` | Launch Studio A/B test panel. |
+| `styles.css` | App-wide `[hidden]` rule. |
+| `supabase/migrations/20261103_experiments.sql` | `nova_experiments` (one running per page), event tag columns, updated action-kind check. |
+| `phase9.test.js` | 10 new tests (104 total). |
+
+**Needs configuration:** run `20261103_experiments.sql`.
+
 ## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
-Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5); instant revenue updates (Phase 6); Action Center with approved execution and evidence receipts (Phase 7).
-2. **More action kinds** for the Action Center: Instagram publishing of approved campaigns, launch-page headline updates, offer price changes, and mission execution steps.
+Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5); instant revenue updates (Phase 6); Action Center with approved execution and evidence receipts (Phase 7); A/B tests with honest statistics (Phase 8).
+2. **More action kinds** for the Action Center: Instagram publishing of approved campaigns, offer price changes, and mission execution steps.
 3. **Port the remaining unreachable routes** (GitHub verify, X/Meta publishing) from `src/index.ts` into `server.js`, then remove `src/index.ts` behind a preview check.
-4. **A/B testing** of launch-page headlines with sample-size-aware results.
 5. **Minify the bundles** and move images to the Vercel CDN `public/` path.
