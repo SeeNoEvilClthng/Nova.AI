@@ -300,6 +300,35 @@ async function updateLead(req, id, status) {
 
 const hasSecret = () => Boolean(secretKey());
 
+// Action Center: concrete actions proposed by agents, approved by the
+// founder, executed by the server. Founders read their own; the server writes.
+const ACTION_FIELDS = "id,workspace_id,kind,title,summary,payload,status,source,dedupe_key,approver_email,decided_at,executed_at,evidence,receipt,error,created_at,updated_at";
+async function insertAction(row) {
+  const rows = await adminRequest("/rest/v1/nova_actions", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
+  return rows[0];
+}
+async function findOpenAction(workspaceId, dedupeKey) {
+  const rows = await adminRequest(`/rest/v1/nova_actions?workspace_id=eq.${encodeURIComponent(workspaceId)}&dedupe_key=eq.${encodeURIComponent(dedupeKey)}&status=in.(proposed,approved,executing)&select=${ACTION_FIELDS}&limit=1`);
+  return rows[0] || null;
+}
+async function listActions(req, workspaceId) {
+  return request(`/rest/v1/nova_actions?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=${ACTION_FIELDS}&order=created_at.desc&limit=40`, req);
+}
+async function getAction(req, workspaceId, id) {
+  const rows = await request(`/rest/v1/nova_actions?id=eq.${encodeURIComponent(id)}&workspace_id=eq.${encodeURIComponent(workspaceId)}&select=${ACTION_FIELDS}&limit=1`, req);
+  return rows[0] || null;
+}
+// Moves an action between states only if it is still in the expected one,
+// so two requests can never execute the same action twice.
+async function transitionAction(id, fromStatus, values) {
+  const rows = await adminRequest(`/rest/v1/nova_actions?id=eq.${encodeURIComponent(id)}&status=eq.${encodeURIComponent(fromStatus)}&select=${ACTION_FIELDS}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ ...values, updated_at: new Date().toISOString() }) });
+  return rows[0] || null;
+}
+async function adminGetOwnerPage(workspaceId) {
+  const rows = await adminRequest(`/rest/v1/nova_published_pages?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=id,slug,published&limit=1`);
+  return rows[0] || null;
+}
+
 // Durable missions. Founders read their own through RLS; the server writes.
 const MISSION_FIELDS = "id,workspace_id,user_id,company,objective,status,resume_status,steps,decision,error,attempts,locked_until,created_at,updated_at";
 async function insertMission(row) {
@@ -432,4 +461,4 @@ async function countPageViews(req, workspaceId) {
   return page ? countRows(`/rest/v1/nova_page_events?page_id=eq.${encodeURIComponent(page.id)}&event_type=eq.view&select=id`, req) : 0;
 }
 
-module.exports = { savePaymentWebhook, listPageEventsForGrowth, listLeadsForGrowth, listOrdersForGrowth, adminOutreachLeads, adminCountEmailSendsSince, insertEmailSends, markLeadsContacted, unsubscribeLead, insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };
+module.exports = { insertAction, findOpenAction, listActions, getAction, transitionAction, adminGetOwnerPage, savePaymentWebhook, listPageEventsForGrowth, listLeadsForGrowth, listOrdersForGrowth, adminOutreachLeads, adminCountEmailSendsSince, insertEmailSends, markLeadsContacted, unsubscribeLead, insertMission, listMissions, getMission, claimMission, updateMission, adminListActiveMissions, adminPageMetrics, adminValidationCount, adminListOrders, adminWorkspaceTokens, adminTokensSince, adminGetSubscription, adminListOperatorWorkspaces, insertOperatorRun, updateOperatorRun, adminLatestOperatorRun, listOperatorRuns, getPaymentConnection, savePaymentConnection, deletePaymentConnection, markPaymentSynced, listPaymentConnections, upsertOrders, listOrders, countPageViews, configured, hasSecret, rateLimitHit, publicConfig, verifyUser, listWorkspaces, createWorkspace, getWorkspace, saveWorkspace, renameWorkspace, deleteWorkspace, getSubscription, upsertSubscription, findSubscriptionByStripeId, adminListWorkspaces, adminSaveWorkspace, getSocialConnection, upsertSocialConnection, deleteSocialConnection, listValidation, createValidation, deleteValidation, getPublishedPage, getOwnerPage, publishPage, unpublishPage, captureLead, recordPageEvent, getPageStats, updateLead, insertAiUsage, workspaceAiTokens, adminGetWorkspace, adminListAutomatedWorkspaces };

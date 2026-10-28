@@ -21,6 +21,7 @@ function optionalModule(name, load) {
 }
 const missionRoutes = optionalModule("missions", () => require("./mission-routes"));
 const growthRoutes = optionalModule("growth", () => require("./growth-routes"));
+const actionRoutes = optionalModule("actions", () => require("./action-routes"));
 const { mergeOfferCheckouts, publicOffers } = require("./revenue-engine");
 const { cleanAttribution } = require("./attribution");
 const execution = require("./execution-core");
@@ -98,6 +99,7 @@ const staticFiles = new Map([
   ["/connections.css", ["connections.css", fs.readFileSync(path.join(__dirname, "connections.css"))]],
   ["/operator.css", ["operator.css", fs.readFileSync(path.join(__dirname, "operator.css"))]],
   ["/growth.css", ["growth.css", fs.readFileSync(path.join(__dirname, "growth.css"))]],
+  ["/action-center.css", ["action-center.css", fs.readFileSync(path.join(__dirname, "action-center.css"))]],
   ["/public-site.css", ["public-site.css", fs.readFileSync(path.join(__dirname, "public-site.css"))]],
   ["/world-gateway.css", ["world-gateway.css", fs.readFileSync(path.join(__dirname, "world-gateway.css"))]],
   ["/world-gateway.js", ["world-gateway.js", fs.readFileSync(path.join(__dirname, "world-gateway.js"))]],
@@ -121,7 +123,8 @@ const staticFiles = new Map([
   ["/durable-missions.js", ["durable-missions.js", fs.readFileSync(path.join(__dirname, "durable-missions.js"))]],
   ["/connections.js", ["connections.js", fs.readFileSync(path.join(__dirname, "connections.js"))]],
   ["/operator-panel.js", ["operator-panel.js", fs.readFileSync(path.join(__dirname, "operator-panel.js"))]],
-  ["/growth-panel.js", ["growth-panel.js", fs.readFileSync(path.join(__dirname, "growth-panel.js"))]]
+  ["/growth-panel.js", ["growth-panel.js", fs.readFileSync(path.join(__dirname, "growth-panel.js"))]],
+  ["/action-center.js", ["action-center.js", fs.readFileSync(path.join(__dirname, "action-center.js"))]]
 ]);
 const auraProductImageDirectory = path.join(__dirname, "public/product-images/aura");
 if (fs.existsSync(auraProductImageDirectory)) {
@@ -418,6 +421,8 @@ app.use(async (req, res) => {
   if (!missionRoutes && (pathname.startsWith("/api/durable-missions") || pathname.startsWith("/api/tool-connections"))) return sendJson(res, 503, { error: "Missions are temporarily unavailable" });
   if (growthRoutes && await growthRoutes.handleGrowth({ req, res, pathname, requestUrl, sendJson, readBody, rateLimited })) return;
   if (!growthRoutes && pathname.startsWith("/api/growth/")) return sendJson(res, 503, { error: "Growth tools are temporarily unavailable" });
+  if (actionRoutes && await actionRoutes.handleActions({ req, res, pathname, requestUrl, sendJson, readBody })) return;
+  if (!actionRoutes && pathname.startsWith("/api/actions")) return sendJson(res, 503, { error: "The Action Center is temporarily unavailable" });
   if (pathname.startsWith("/p/") && req.method === "GET") {
     try {
       const page=await supabase.getPublishedPage(decodeURIComponent(pathname.slice(3)));

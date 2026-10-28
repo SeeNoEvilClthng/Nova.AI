@@ -88,7 +88,7 @@ const draftSchema = {
 
 const RULES = "Use only the company metrics and context provided. Never invent numbers, customers, results, or research. Revenue figures are verified Stripe payments; projections must be labelled as estimates. Do not promise income.";
 
-function createOperator({ supabase, router, ledger, syncRevenue, billingEnabled, planRules, assertAiBudget }) {
+function createOperator({ supabase, router, ledger, syncRevenue, billingEnabled, planRules, assertAiBudget, proposeActions }) {
   async function scheduledAccess(workspace) {
     const settings = normalizeSettings(workspace.state?.operatingMode);
     if (settings.paused) return { allowed: false, reason: "Operator is paused" };
@@ -113,7 +113,11 @@ function createOperator({ supabase, router, ledger, syncRevenue, billingEnabled,
         const context = await api.collect({ workspaceId: run.workspaceId });
         const briefing = await api.brief({ workspaceId: run.workspaceId, userId: run.userId, context });
         const drafting = await api.draftInternalWork({ workspaceId: run.workspaceId, userId: run.userId, mode: run.mode, context, brief: briefing.brief });
-        await api.finish({ runId: run.runId, values: { status: "completed", metrics: context.metrics, brief: { ...briefing.brief, warnings: [...context.warnings, ...briefing.warnings] }, drafts: drafting.drafts, model: briefing.model, tokens: briefing.tokens + drafting.tokens } });
+        // Concrete, ready-to-run proposals for the Action Center. A proposer
+        // failure is reported but never fails the cycle.
+        let proposals = { created: 0 };
+        if (proposeActions) { try { proposals = await proposeActions({ workspaceId: run.workspaceId, userId: run.userId, metrics: context.metrics }); } catch (error) { context.warnings.push(`Action proposals skipped: ${String(error.message).slice(0, 160)}`); } }
+        await api.finish({ runId: run.runId, values: { status: "completed", metrics: context.metrics, brief: { ...briefing.brief, proposedActions: proposals.created, warnings: [...context.warnings, ...briefing.warnings] }, drafts: drafting.drafts, model: briefing.model, tokens: briefing.tokens + drafting.tokens } });
         return { runId: run.runId, status: "completed" };
       } catch (error) {
         await api.finish({ runId: run.runId, values: { status: "failed", error: String(error?.message || error).slice(0, 300) } }).catch(() => {});

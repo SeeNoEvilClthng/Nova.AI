@@ -242,9 +242,39 @@ This needs the optional **Webhook Endpoints: Write** permission on the restricte
 | `supabase/migrations/20261101_instant_revenue.sql` | Webhook columns on `nova_payment_connections` (server-only). |
 | `phase7.test.js` | 5 new tests (86 total). |
 
+## Phase 7 (2026-11-02): Action Center — approved actions that actually run
+
+Each operator cycle now ends by proposing **concrete, ready-to-run actions** built from the company's real state:
+- **Email N new leads:** proposed when there are new subscribed leads and email is configured. It comes with the Sales agent's drafted subject and body.
+- **Take "<offer>" live:** proposed for draft offers once Stripe is connected. It includes the exact name, price and billing.
+
+The founder reviews each one and clicks **Approve & run** or **Reject**.
+
+On approval, the server runs it with the **same code as the manual buttons** (`sendFollowUp`, `goLiveOffer`). It then stores the provider's own IDs as evidence: Resend message IDs and the batch ID, or the Stripe payment link, product and price IDs plus the URL. It also stores an **HMAC receipt that covers a hash of the evidence**, so editing the stored proof invalidates it. The UI shows "✓ signature valid" when the receipt checks out.
+
+**Guarantees:**
+- Nothing outside Nova runs without a per-action approval; Autopilot never approves these.
+- Every state change is conditional (`proposed → approved → executing → succeeded/failed`), so an action can't run twice, even if two requests race.
+- At most one open action per purpose, enforced by a partial unique index.
+- A failure records the reason and can be retried. Email retries only reach leads who weren't sent to, because sent leads are marked contacted.
+- A proposer failure is logged as a cycle warning and never fails the cycle.
+
+| File | Change |
+|---|---|
+| `actions.js` (new) | The action state machine, payload validation per kind, evidence-covering receipts, public view. |
+| `action-routes.js` (new) | `GET /api/actions`, `POST /api/actions/<id>/decision`, `POST /api/actions/<id>/retry`; the executors; `proposeOperatorActions`. Loaded behind the startup guard. |
+| `growth-routes.js`, `revenue-routes.js` | Extracted `draftFollowUp`/`sendFollowUp` and added `goLiveOffer`, so manual and approved actions share one code path. |
+| `operator.js`, `operator-runtime.js`, `operator-panel.js` | Cycles propose actions; the brief shows how many are waiting. |
+| `action-center.js`, `action-center.css`, `index.html` | Action Center panel on the Autopilot screen: previews, approve/reject, evidence, receipt status, retry. |
+| `supabase.js` | Action storage, including conditional state transitions. |
+| `supabase/migrations/20261102_actions.sql` | `nova_actions` (owners can read; only the server can write) with an open-action uniqueness index. |
+| `phase8.test.js` | 8 new tests (94 total). |
+
+**Needs configuration:** run `20261102_actions.sql`. Email actions need Resend to be configured (Phase 5).
+
 ## Prioritised plan for what's next (impact ÷ effort, lowest risk first)
-Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5); instant revenue updates (Phase 6).
-2. **Execute approved actions.** Let approved operator and mission actions call connected tools (Instagram publishing, lead follow-up, offer changes), with per-action permission, evidence and verification.
+Done: shared rate limiting, anonymous-write lockdown and bundling (1b); model routing and the business-to-revenue path (Phase 2); operating modes with audit log, caps and pause (Phase 3); durable missions in production (Phase 4); attribution and consent-based follow-up (Phase 5); instant revenue updates (Phase 6); Action Center with approved execution and evidence receipts (Phase 7).
+2. **More action kinds** for the Action Center: Instagram publishing of approved campaigns, launch-page headline updates, offer price changes, and mission execution steps.
 3. **Port the remaining unreachable routes** (GitHub verify, X/Meta publishing) from `src/index.ts` into `server.js`, then remove `src/index.ts` behind a preview check.
 4. **A/B testing** of launch-page headlines with sample-size-aware results.
 5. **Minify the bundles** and move images to the Vercel CDN `public/` path.

@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="connections.css">
   <link rel="stylesheet" href="operator.css">
   <link rel="stylesheet" href="growth.css">
+  <link rel="stylesheet" href="action-center.css">
 </head>
 <body>
   <aside class="sidebar">
@@ -295,6 +296,11 @@
         <div id="operatorLatest" class="operator-empty"><b>No operating cycles yet</b><span>Run a cycle to get a CEO brief based on this company’s real numbers.</span></div>
         <details class="operator-history"><summary>Cycle history and audit log</summary><div id="operatorHistory"></div></details>
       </section>
+      <section class="action-center panel" aria-labelledby="actionCenterTitle">
+        <div class="panel-head"><div><small>ACTION CENTER</small><h3 id="actionCenterTitle">Ready-to-run actions, waiting for your approval</h3></div><span id="actionCenterState">Loading…</span></div>
+        <p class="action-center-note">Nova proposes specific actions from your real numbers. Nothing here runs until you approve it. Every run records proof from the provider (email message IDs, Stripe link IDs) and a tamper-proof receipt.</p>
+        <div id="actionList" class="action-empty">No actions yet. Run an operating cycle to get proposals.</div>
+      </section>
       <section class="durable-command panel"><div class="durable-command-copy"><small>DURABLE AGENT MISSIONS</small><h3>Assign work that survives reloads and failures.</h3><p>Strategy, Research, and Builder complete retryable preparation steps. The mission then pauses until you approve or reject its external execution boundary.</p><div class="durable-trust"><span>↻ Automatic retries</span><span>Ⅱ Approval pause</span><span>✓ Persistent run history</span></div></div><form id="durableMissionForm"><label>MISSION OUTCOME<textarea id="durableMissionObjective" required maxlength="1200" placeholder="Example: Prepare and validate the launch required to recruit our first five paying design partners."></textarea></label><button class="primary" type="submit">Start durable mission →</button></form></section>
       <section class="durable-runs panel"><div class="panel-head"><div><small>WORKFLOW RUNTIME</small><h3>Durable mission runs</h3></div><span id="durableRuntimeStatus">Checking runtime…</span></div><div id="durableMissionList" class="engine-empty"><b>No durable missions yet</b><span>Start a mission to create a crash-safe, retryable run with a founder approval checkpoint.</span></div></section>
       <section class="autopilot-scoreboard">
@@ -401,5 +407,6 @@
   <script src="connections.js"></script>
   <script src="operator-panel.js"></script>
   <script src="growth-panel.js"></script>
+  <script src="action-center.js"></script>
 </body>
 </html>

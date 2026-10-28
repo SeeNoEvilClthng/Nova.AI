@@ -55,31 +55,14 @@ async function handleGrowth({ req, res, pathname, requestUrl, sendJson, readBody
 
     if (pathname === "/api/growth/followup/draft" && req.method === "POST") {
       await assertCanGenerate(req, user, workspace.id);
-      const offer = publicOffers(workspace.state?.offers)[0] || null;
-      const context = { company, plan: workspace.state?.plan || null, liveOffer: offer, pageUrl, founderNotes: String(input.notes || "").slice(0, 600) };
-      const { result, contribution, warnings } = await router.generateAgentTask(context, () => outreach.templateFollowUp({ company, offer, pageUrl }), draftSchema, {
-        role: "Sales Agent", schemaName: "lead_followup", tier: "fast",
-        instructions: "You are Nova.Ai's Sales Agent. Write one short, personal, plain-text follow-up email to people who signed up for updates on this company's launch page. Thank them, ask one specific question about their situation, and if a live offer is provided, mention it once with its link. Be honest: no invented scarcity, discounts, testimonials, results or guarantees, and no claims the company cannot back up. Under 150 words. Do not add an unsubscribe line; it is added automatically. Return one JSON object with subject and body."
-      });
-      await usageLedger.record(contribution, { workspaceId: workspace.id, userId: user.id, operation: "lead-followup-draft" });
-      return sendJson(res, 200, { draft: outreach.cleanDraft(result), templated: contribution.model === "Demo engine", warnings }), true;
+      const result = await draftFollowUp({ workspace, pageUrl, notes: input.notes, userId: user.id });
+      return sendJson(res, 200, result), true;
     }
 
     if (pathname === "/api/growth/followup/send" && req.method === "POST") {
       if (await rateLimited(req, "lead-followup-send", 10)) return sendJson(res, 429, { error: "Too many sends this hour" }), true;
       if (input.confirm !== true) return sendJson(res, 400, { error: "Confirm the exact message and recipients before sending" }), true;
-      const config = outreach.emailConfig();
-      if (!config) return sendJson(res, 503, { error: "Email sending isn't set up yet. Add RESEND_API_KEY and NOVA_EMAIL_FROM in Vercel, or copy the draft and send it yourself." }), true;
-      if (!page) return sendJson(res, 409, { error: "Publish a launch page to collect leads first" }), true;
-      const draft = outreach.cleanDraft(input), leads = await supabase.adminOutreachLeads(page.id);
-      if (!leads.length) return sendJson(res, 409, { error: "There are no new, subscribed leads to email" }), true;
-      const sentToday = await supabase.adminCountEmailSendsSince(workspace.id, new Date(Date.now() - 86400000).toISOString());
-      const batchId = crypto.randomUUID();
-      const { results, skippedForLimits } = await outreach.sendBatch({ leads, draft, company, pageUrl, appUrl: appUrl(), replyTo: user.email, sentToday, batchId, send: (message, replyTo, key) => outreach.sendViaResend({ config, message, replyTo, idempotencyKey: key }) });
-      if (results.length) await supabase.insertEmailSends(results.map(item => ({ workspace_id: workspace.id, lead_id: item.lead.id, batch_id: batchId, email: item.lead.email, subject: draft.subject, status: item.status, provider_id: item.providerId || null, error: item.error || null })));
-      await supabase.markLeadsContacted(results.filter(item => item.status === "sent").map(item => item.lead.id));
-      const sent = results.filter(item => item.status === "sent").length;
-      return sendJson(res, 200, { sent, failed: results.length - sent, skippedForLimits, remainingToday: Math.max(0, outreach.MAX_PER_DAY - sentToday - results.length) }), true;
+      return sendJson(res, 200, await sendFollowUp({ workspaceId: workspace.id, workspace, page, draft: input, replyTo: user.email })), true;
     }
     return sendJson(res, 404, { error: "Not found" }), true;
   } catch (error) {
@@ -87,4 +70,37 @@ async function handleGrowth({ req, res, pathname, requestUrl, sendJson, readBody
   }
 }
 
-module.exports = { handleGrowth };
+// Shared by the Growth panel and the Action Center, so a founder-approved
+// action runs exactly the same code as a manual send.
+async function draftFollowUp({ workspace, pageUrl, notes, userId }) {
+  const company = String(workspace.state?.plan?.name || workspace.name || "our company");
+  const offer = publicOffers(workspace.state?.offers)[0] || null;
+  const context = { company, plan: workspace.state?.plan || null, liveOffer: offer, pageUrl, founderNotes: String(notes || "").slice(0, 600) };
+  const { result, contribution, warnings } = await router.generateAgentTask(context, () => outreach.templateFollowUp({ company, offer, pageUrl }), draftSchema, {
+    role: "Sales Agent", schemaName: "lead_followup", tier: "fast",
+    instructions: "You are Nova.Ai's Sales Agent. Write one short, personal, plain-text follow-up email to people who signed up for updates on this company's launch page. Thank them, ask one specific question about their situation, and if a live offer is provided, mention it once with its link. Be honest: no invented scarcity, discounts, testimonials, results or guarantees, and no claims the company cannot back up. Under 150 words. Do not add an unsubscribe line; it is added automatically. Return one JSON object with subject and body."
+  });
+  await usageLedger.record(contribution, { workspaceId: workspace.id, userId, operation: "lead-followup-draft" });
+  return { draft: outreach.cleanDraft(result), templated: contribution.model === "Demo engine", warnings };
+}
+
+async function sendFollowUp({ workspaceId, workspace, page, draft: input, replyTo }) {
+  const config = outreach.emailConfig();
+  if (!config) throw Object.assign(new Error("Email sending isn't set up yet. Add RESEND_API_KEY and NOVA_EMAIL_FROM in Vercel, or copy the draft and send it yourself."), { status: 503 });
+  workspace = workspace || await supabase.adminGetWorkspace(workspaceId, "id,name,state");
+  page = page === undefined ? await supabase.adminGetOwnerPage(workspaceId) : page;
+  if (!page) throw Object.assign(new Error("Publish a launch page to collect leads first"), { status: 409 });
+  const company = String(workspace?.state?.plan?.name || workspace?.name || "our company");
+  const pageUrl = page.published && appUrl() ? `${appUrl()}/p/${page.slug}` : null;
+  const draft = outreach.cleanDraft(input), leads = await supabase.adminOutreachLeads(page.id);
+  if (!leads.length) throw Object.assign(new Error("There are no new, subscribed leads to email"), { status: 409 });
+  const sentToday = await supabase.adminCountEmailSendsSince(workspaceId, new Date(Date.now() - 86400000).toISOString());
+  const batchId = crypto.randomUUID();
+  const { results, skippedForLimits } = await outreach.sendBatch({ leads, draft, company, pageUrl, appUrl: appUrl(), replyTo, sentToday, batchId, send: (message, replyAddress, key) => outreach.sendViaResend({ config, message, replyTo: replyAddress, idempotencyKey: key }) });
+  if (results.length) await supabase.insertEmailSends(results.map(item => ({ workspace_id: workspaceId, lead_id: item.lead.id, batch_id: batchId, email: item.lead.email, subject: draft.subject, status: item.status, provider_id: item.providerId || null, error: item.error || null })));
+  await supabase.markLeadsContacted(results.filter(item => item.status === "sent").map(item => item.lead.id));
+  const sent = results.filter(item => item.status === "sent");
+  return { sent: sent.length, failed: results.length - sent.length, skippedForLimits, remainingToday: Math.max(0, outreach.MAX_PER_DAY - sentToday - results.length), batchId, providerIds: sent.map(item => item.providerId).filter(Boolean).slice(0, 50) };
+}
+
+module.exports = { handleGrowth, draftFollowUp, sendFollowUp };

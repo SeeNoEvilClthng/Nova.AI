@@ -164,4 +164,16 @@ async function handleFounderWebhook({ req, res, pathname, sendJson, readRawBody,
   }
 }
 
-module.exports = { handleRevenue, handleFounderWebhook, syncAllRevenue, syncWorkspaceRevenue, cleanOffer, templateOffer, offerSchema };
+// Used by the Action Center after the founder approves going live. Same
+// engine call as the Revenue screen's "Go live" button.
+async function goLiveOffer({ workspaceId, offerId }) {
+  const workspace = await supabase.adminGetWorkspace(workspaceId, "id,state");
+  if (!workspace) throw Object.assign(new Error("Workspace not found"), { status: 404 });
+  const page = await supabase.adminGetOwnerPage(workspaceId), appUrl = String(process.env.APP_URL || "").replace(/\/$/, "");
+  const successUrl = page?.published && appUrl.startsWith("https://") ? `${appUrl}/p/${encodeURIComponent(page.slug)}?paid=1` : null;
+  const result = await engine.createCheckout({ workspace, offerId, confirm: true, successUrl });
+  await supabase.adminSaveWorkspace(workspaceId, { ...(workspace.state || {}), offers: result.offers });
+  return result.offer;
+}
+
+module.exports = { goLiveOffer, handleRevenue, handleFounderWebhook, syncAllRevenue, syncWorkspaceRevenue, cleanOffer, templateOffer, offerSchema };
