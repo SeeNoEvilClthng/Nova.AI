@@ -8,6 +8,7 @@ const billing = require("./billing");
 const { preserveUsage } = require("./ai-budget");
 const { usageLedger, accountEntitlement, enforceAiBudget } = require("./ai-access");
 const entitlements = require("./entitlements");
+const { friendlyError } = require("./db-errors");
 const { handleRevenue, handleFounderWebhook, syncAllRevenue } = require("./revenue-routes");
 const { handleOperator, runScheduledCycles } = require("./operator-routes");
 // Feature modules that load behind a guard: if one fails to load in an
@@ -261,6 +262,10 @@ function scheduledCampaign(product, sequence = 0) {
 }
 
 function sendJson(res, status, value) {
+  if (value && typeof value.error === "string") {
+    const error = friendlyError(value.error);
+    if (error !== value.error) { console.error("Database error:", value.error.slice(0, 500)); value = { ...value, error }; }
+  }
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(value));
 }
